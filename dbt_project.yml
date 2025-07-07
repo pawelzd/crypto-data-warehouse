@@ -1,0 +1,40 @@
+name: 'dbt_to_bq'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dbt_bq_profile'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dbt_to_bq:
+    solana_wallets_history:
+        +alias: raw_solana_wallets_history
+    solana_mint_metadata:
+        +alias: raw_solana_mint_metadata
+    solana_price_history:
+        +alias: raw_solana_price_history
+    staging:
+      +materialized: view
+      +schema: bronze
+    silver:
+      +materialized: incremental
+      +schema: silver 
+
+      dim_token_prices: 
+        +unique_key: 'price_sk'
+        +cluster_by: ['token_address']
+        +partition_by:
+          field: "price_timestamp"
+          data_type: "timestamp"
+          granularity: "day"

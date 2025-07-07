@@ -1,0 +1,3 @@
+packages:
+  - package: dbt-labs/dbt_utils  # Use the HYPHEN for maximum reliability
+    version: 1.3.0              # Use the newer version you found

@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: solana_raw
+    database: positive-tuner-255507  
+    schema: wallets_extraction       
+    tables:
+      - name: solana_price_history
+        description: "Raw token price data, loaded daily."
+      - name: solana_wallet_history_manual
+        description: "Raw snapshot of wallet asset holdings."
+      - name: solana_mint_metadata
+        description: "Raw mint metadata."
