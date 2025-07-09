@@ -6,11 +6,6 @@ dim_mint_metadata as (
     select * from {{ ref('dim_mint_metadata') }}
 ),
 
-dim_token_prices as (
-    select * from {{ ref('dim_token_prices') }}
-),
-
-
 joined_and_ranked as (
     select
         wh.wallet_address,
