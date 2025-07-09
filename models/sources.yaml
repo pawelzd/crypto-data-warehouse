@@ -7,7 +7,7 @@ sources:
     tables:
       - name: solana_price_history
         description: "Raw token price data, loaded daily."
-      - name: solana_wallet_history_manual
+      - name: raw_solana_wallet_history
         description: "Raw snapshot of wallet asset holdings."
       - name: solana_mint_metadata
         description: "Raw mint metadata."

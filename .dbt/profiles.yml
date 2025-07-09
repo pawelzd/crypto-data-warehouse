@@ -9,4 +9,4 @@ dbt_bq_profile:
       threads: 4
       timeout_seconds: 300
       location: europe-central2
-      keyfile: C:\Users\azdan\projects\dbt_bq\positive-tuner-255507-3f858f07cec5.json
+      keyfile: /opt/dbt/dbt_bq/positive-tuner-255507-3f858f07cec5.json

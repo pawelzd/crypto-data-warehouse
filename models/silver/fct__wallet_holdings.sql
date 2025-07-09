@@ -6,10 +6,16 @@ dim_mint_metadata as (
     select * from {{ ref('dim_mint_metadata') }}
 ),
 
+dim_token_prices as (
+    select * from {{ ref('dim_token_prices') }}
+),
+
+
 joined_and_ranked as (
     select
         wh.wallet_address,
         wh.token_address,
+        wh.load_id,
         wh.transaction_count,
         wh.asset_amount,
         wh.first_acquired_timestamp,
@@ -18,8 +24,8 @@ joined_and_ranked as (
 
     from wallet_history as wh
 
-    left join dim_mint_metadata as dmm
-        on wh.token_address = dmm.mint_address
+    left join dim_token_metadata as dmm
+        on wh.token_address = dmm.token_address
         and dmm.dbt_valid_to is null
 
 )
