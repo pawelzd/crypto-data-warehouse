@@ -11,3 +11,7 @@ sources:
         description: "Raw snapshot of wallet asset holdings."
       - name: solana_mint_metadata
         description: "Raw mint metadata."
+      - name: wallet_tokens
+        description: "Raw wallet token holdings, test data."
+      - name: tokens 
+        description: "Raw token metadata, test data."

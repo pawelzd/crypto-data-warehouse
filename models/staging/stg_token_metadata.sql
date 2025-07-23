@@ -3,7 +3,7 @@ with source as (
 ),
 cleaned as (
     select
-        address as mint_address,
+        address as token_address,
         symbol as token_symbol,
         name as token_name,
         safe_cast(decimals as int64) as token_decimals,
@@ -17,12 +17,12 @@ cleaned as (
 ),
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['mint_address']) }} as mint_metadata_sk, 
+        {{ dbt_utils.generate_surrogate_key(['token_address']) }} as token_metadata_sk, 
         *,
     from cleaned
     where
-        mint_address is not null
+        token_address is not null
         and token_name is not null
-        and length(mint_address) between 32 and 44
+        -- and length(token_address) between 32 and 44
 )
 select * from final

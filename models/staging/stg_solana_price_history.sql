@@ -10,3 +10,4 @@ where
     safe_cast(value as numeric) is not null
     and address is not null
     and unixTime is not null
+    and value is not null

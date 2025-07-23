@@ -1,10 +1,10 @@
-{% snapshot dim_mint_metadata %}
+{% snapshot dim_token_metadata %}
 
 {{
     config(
       target_schema='silver',
       strategy='check',
-      unique_key='mint_address',
+      unique_key='token_address',
       check_cols=[
           'token_symbol', 
           'token_name', 
@@ -17,6 +17,6 @@
     )
 }}
 
-select * from {{ ref('stg_mint_metadata') }}
+select * from {{ ref('stg_token_metadata') }}
 
 {% endsnapshot %}

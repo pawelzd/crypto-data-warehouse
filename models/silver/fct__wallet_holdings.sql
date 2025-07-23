@@ -2,8 +2,8 @@ with wallet_history as (
     select * from {{ ref('stg_solana_wallet_history') }}
 ),
 
-dim_mint_metadata as (
-    select * from {{ ref('dim_mint_metadata') }}
+dim_token_metadata as (
+    select * from {{ ref('dim_token_metadata') }}
 ),
 
 joined_and_ranked as (
@@ -15,7 +15,7 @@ joined_and_ranked as (
         wh.asset_amount,
         wh.first_acquired_timestamp,
         wh.load_date,
-        dmm.mint_metadata_sk
+        dmm.token_metadata_sk
 
     from wallet_history as wh
 
