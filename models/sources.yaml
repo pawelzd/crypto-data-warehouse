@@ -2,16 +2,31 @@ version: 2
 
 sources:
   - name: solana_raw
-    database: positive-tuner-255507  
-    schema: wallets_extraction       
+    description: "Source for raw wallet and metadata extractions."
+    database: positive-tuner-255507
+    schema: wallets_extraction
     tables:
-      - name: solana_price_history
-        description: "Raw token price data, loaded daily."
       - name: raw_solana_wallet_history
         description: "Raw snapshot of wallet asset holdings."
       - name: solana_mint_metadata
         description: "Raw mint metadata."
       - name: wallet_tokens
         description: "Raw wallet token holdings, test data."
-      - name: tokens 
+      - name: tokens
         description: "Raw token metadata, test data."
+
+  - name: solana_raw_prices
+    description: "Source for token price data."
+    database: positive-tuner-255507
+    schema: bronze
+    tables:
+      - name: raw_solana_token_prices
+        description: "Raw token price data, loaded daily."
+        
+  - name: gold
+    description: "Gold layer for curated data."
+    database: positive-tuner-255507
+    schema: gold
+    tables:
+      - name: unique_tokens_base
+        description: "Unique tokens held across all wallets."

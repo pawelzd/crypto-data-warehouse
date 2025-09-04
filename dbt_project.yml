@@ -23,10 +23,10 @@ models:
       +schema: bronze
       solana_wallets_history:
         +alias: raw_solana_wallets_history
-    solana_mint_metadata:
-        +alias: raw_solana_token_metadata
-    solana_price_history:
-        +alias: raw_solana_price_history
+      solana_mint_metadata:
+          +alias: raw_solana_token_metadata
+      solana_price_history:
+          +alias: raw_solana_price_history
         
     silver:
       +materialized: incremental

@@ -1,0 +1,72 @@
+-- WITH unique_pairs AS (
+--     SELECT DISTINCT
+--         wallet_address,
+--         token_address,
+--         TIMESTAMP_TRUNC(first_acquired_timestamp, HOUR) AS ts_hour,
+--     FROM
+--         `positive-tuner-255507.gold.highly_held_tokens`
+-- )
+SELECT
+    -- hh.wallet_address,
+    tp.token_address,
+    hp.first_acquired_timestamp,
+    COALESCE(tp.price, 0) AS price,
+    COALESCE(tp.ret_1h, 0) AS ret_1h,
+    COALESCE(tp.logret_1h, 0) AS logret_1h,
+    COALESCE(CASE WHEN IS_NAN(tp.mean_ret_24h) THEN 0 ELSE tp.mean_ret_24h END, 0) AS mean_ret_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.std_ret_24h) THEN 0 ELSE tp.std_ret_24h END, 0) AS std_ret_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.mean_ret_72h) THEN 0 ELSE tp.mean_ret_72h END, 0) AS mean_ret_72h,
+    COALESCE(CASE WHEN IS_NAN(tp.std_ret_72h) THEN 0 ELSE tp.std_ret_72h END, 0) AS std_ret_72h,
+    COALESCE(CASE WHEN IS_NAN(tp.mean_ret_168h) THEN 0 ELSE tp.mean_ret_168h END, 0) AS mean_ret_168h,
+    COALESCE(CASE WHEN IS_NAN(tp.std_ret_168h) THEN 0 ELSE tp.std_ret_168h END, 0) AS std_ret_168h,
+    COALESCE(CASE WHEN IS_NAN(tp.rv_24h) THEN 0 ELSE tp.rv_24h END, 0) AS rv_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.rv_7d) THEN 0 ELSE tp.rv_7d END, 0) AS rv_7d,
+    COALESCE(CASE WHEN IS_NAN(tp.sharpe_24h) THEN 0 ELSE tp.sharpe_24h END, 0) AS sharpe_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.sharpe_7d) THEN 0 ELSE tp.sharpe_7d END, 0) AS sharpe_7d,
+    COALESCE(CASE WHEN IS_NAN(tp.ret_z_24h) THEN 0 ELSE tp.ret_z_24h END, 0) AS ret_z_24h,
+    COALESCE(tp.cumret_24h, 0) AS cumret_24h,
+    COALESCE(tp.cumret_7d, 0) AS cumret_7d,
+    COALESCE(tp.sma_6h, 0) AS sma_6h,
+    COALESCE(tp.sma_12h, 0) AS sma_12h,
+    COALESCE(tp.sma_24h, 0) AS sma_24h,
+    COALESCE(tp.sma_72h, 0) AS sma_72h,
+    COALESCE(tp.sma_168h, 0) AS sma_168h,
+    COALESCE(tp.macd_sma_12_26h, 0) AS macd_sma_12_26h,
+    COALESCE(tp.dist_to_sma_6h, 0) AS dist_to_sma_6h,
+    COALESCE(tp.dist_to_sma_12h, 0) AS dist_to_sma_12h,
+    COALESCE(tp.dist_to_sma_24h, 0) AS dist_to_sma_24h,
+    COALESCE(tp.dist_to_sma_72h, 0) AS dist_to_sma_72h,
+    COALESCE(tp.dist_to_sma_168h, 0) AS dist_to_sma_168h,
+    COALESCE(CASE WHEN IS_NAN(tp.price_z_24h) THEN 0 ELSE tp.price_z_24h END, 0) AS price_z_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.pct_in_range_24h) THEN 0 ELSE tp.pct_in_range_24h END, 0) AS pct_in_range_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.dist_to_high_24h) THEN 0 ELSE tp.dist_to_high_24h END, 0) AS dist_to_high_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.dist_to_low_24h) THEN 0 ELSE tp.dist_to_low_24h END, 0) AS dist_to_low_24h,
+    COALESCE(tp.breakout_high_24h, 0) AS breakout_high_24h,
+    COALESCE(tp.breakout_low_24h, 0) AS breakout_low_24h,
+    COALESCE(CASE WHEN IS_NAN(tp.drawdown_7d) THEN 0 ELSE tp.drawdown_7d END, 0) AS drawdown_7d,
+    COALESCE(CASE WHEN IS_NAN(tp.rsi_14) THEN 0 ELSE tp.rsi_14 END, 0) AS rsi_14,
+    COALESCE(CASE WHEN IS_NAN(tp.acf1_72h) THEN 0 ELSE tp.acf1_72h END, 0) AS acf1_72h,
+    COALESCE(tp.miss_24h, 0) AS miss_24h,
+    COALESCE(tp.miss_72h, 0) AS miss_72h,
+    COALESCE(tp.miss_168h, 0) AS miss_168h,
+    COALESCE(tp.vol_ratio_24_7d, 0) AS vol_ratio_24_7d,
+    COALESCE(tp.sharpe_delta, 0) AS sharpe_delta,
+    COALESCE(tp.sin_hour, 0) AS sin_hour,
+    COALESCE(tp.cos_hour, 0) AS cos_hour,
+    COALESCE(tp.sin_dow, 0) AS sin_dow,
+    COALESCE(tp.cos_dow, 0) AS cos_dow,   
+    -- COALESCE(tp.mom_6h, 0) AS mom_6h,
+    -- COALESCE(tp.mom_12h, 0) AS mom_12h,
+    -- COALESCE(tp.mom_24h, 0) AS mom_24h,
+    -- COALESCE(tp.mom_72h, 0) AS mom_72h,
+    -- COALESCE(tp.mom_168h, 0) AS mom_168h,               
+    tp.dow_1_sun_7_sat,
+    tp.hour_of_day,
+    hp.label_peak_30pct_7d AS has_peak_happen
+FROM
+    {{ ref('ml_token_prices_features7d_v') }} AS tp
+INNER JOIN
+    {{ ref('ml_highest_peaks_in7d_v') }} AS hp
+    ON tp.token_address = hp.token_address
+   -- AND hp.wallet_address = tp.wallet_address
+    AND tp.ts_hour = hp.first_acquired_timestamp
