@@ -11,6 +11,7 @@ unique_tokens AS (
 
 SELECT DISTINCT
     wh.token_address,
+    tm.type,
     TIMESTAMP_TRUNC(wh.first_acquired_timestamp, HOUR) AS first_acquired_timestamp
 FROM
     wallet_history AS wh

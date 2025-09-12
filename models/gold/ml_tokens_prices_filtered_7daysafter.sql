@@ -11,7 +11,8 @@ SELECT
     tm.price_usd_on_acquisition,
     tm.price_change,
     tm.price_change_pct,
-    tm.hours_change_from_acquisition
+    tm.hours_change_from_acquisition,
+    tm.type
 FROM
     prices AS tm
 WHERE

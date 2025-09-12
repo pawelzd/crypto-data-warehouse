@@ -14,7 +14,8 @@ SELECT
     wh.token_address,
     wh.first_acquired_timestamp,
     tm.price_timestamp,
-    tm.price_usd
+    tm.price_usd,
+    wh.type
 FROM
     tokens AS wh
 INNER JOIN

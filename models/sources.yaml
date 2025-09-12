@@ -22,7 +22,11 @@ sources:
     tables:
       - name: raw_solana_token_prices
         description: "Raw token price data, loaded daily."
-        
+      - name: raw_market_tokens_prices
+        description: "Raw market token prices from CryptoDataDownload."
+      - name: raw_wallet_history_features
+        description: "Raw wallet history features, loaded daily."
+
   - name: gold
     description: "Gold layer for curated data."
     database: positive-tuner-255507

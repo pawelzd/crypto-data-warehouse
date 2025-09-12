@@ -1,5 +1,5 @@
 with source_data as (
-    select * from {{ ref('stg_solana_price_history') }}
+    select * from {{ ref('stg_market_price_history') }}
 )
 
 select
@@ -7,11 +7,9 @@ select
     s.token_address,
     s.price_timestamp,
     s.price_usd
-    
 from source_data as s
 
 {% if is_incremental() %}
-
 left join (
     select
         token_address,
@@ -23,5 +21,4 @@ on s.token_address = dest.token_address
 
 where dest.token_address is null
    or s.price_timestamp > dest.max_timestamp
-
 {% endif %}
