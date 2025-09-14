@@ -26,6 +26,8 @@ sources:
         description: "Raw market token prices from CryptoDataDownload."
       - name: raw_wallet_history_features
         description: "Raw wallet history features, loaded daily."
+      - name: raw_tokens_metadata
+        description: "Raw token market metadata (price, liquidity, supplies, caps)."
 
   - name: gold
     description: "Gold layer for curated data."
