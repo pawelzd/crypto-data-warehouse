@@ -29,6 +29,16 @@ sources:
       - name: raw_tokens_metadata
         description: "Raw token market metadata (price, liquidity, supplies, caps)."
 
+  - name: silver
+    description: "Silver layer for cleaned and enriched data."
+    database: positive-tuner-255507
+    schema: silver
+    tables:
+      - name: fct_token_prices
+        description: "Fact table of token prices with daily partitions."
+      - name: fct__token_market_metadata
+        description: "Fact table of token market metadata with daily partitions."
+
   - name: gold
     description: "Gold layer for curated data."
     database: positive-tuner-255507

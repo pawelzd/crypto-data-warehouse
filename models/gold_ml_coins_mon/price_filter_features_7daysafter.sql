@@ -142,16 +142,26 @@ per_series AS (
 
     -- kinetics: first time to hit thresholds (in hours; fallback=200 if never hit)
     COALESCE(MIN(IF(cumret_from_entry >= 0.10, h, NULL)), 200) AS t_hit_up_10,
+    COALESCE(MIN(IF(cumret_from_entry >= 0.15, h, NULL)), 200) AS t_hit_up_15,
+    COALESCE(MIN(IF(cumret_from_entry >= 0.20, h, NULL)), 200) AS t_hit_up_20,
     COALESCE(MIN(IF(cumret_from_entry >= 0.25, h, NULL)), 200) AS t_hit_up_25,
     COALESCE(MIN(IF(cumret_from_entry >= 0.35, h, NULL)), 200) AS t_hit_up_35,
+    COALESCE(MIN(IF(cumret_from_entry >= 0.40, h, NULL)), 200) AS t_hit_up_40,
+    COALESCE(MIN(IF(cumret_from_entry >= 0.45, h, NULL)), 200) AS t_hit_up_45,
     COALESCE(MIN(IF(cumret_from_entry >= 0.50, h, NULL)), 200) AS t_hit_up_50,
+    COALESCE(MIN(IF(cumret_from_entry >= 0.75, h, NULL)), 200) AS t_hit_up_75,
     COALESCE(MIN(IF(cumret_from_entry >= 1.00, h, NULL)), 200) AS t_hit_up_100,
     COALESCE(MIN(IF(cumret_from_entry >= 2.00, h, NULL)), 200) AS t_hit_up_200,
     COALESCE(MIN(IF(cumret_from_entry >= 5.00, h, NULL)), 200) AS t_hit_up_500,
 
     COALESCE(MIN(IF(cumret_from_entry <= -0.10, h, NULL)), 200) AS t_hit_dn_10,
+    COALESCE(MIN(IF(cumret_from_entry <= -0.15, h, NULL)), 200) AS t_hit_dn_15,
+    COALESCE(MIN(IF(cumret_from_entry <= -0.20, h, NULL)), 200) AS t_hit_dn_20,
     COALESCE(MIN(IF(cumret_from_entry <= -0.25, h, NULL)), 200) AS t_hit_dn_25,
+    COALESCE(MIN(IF(cumret_from_entry <= -0.30, h, NULL)), 200) AS t_hit_dn_30,
     COALESCE(MIN(IF(cumret_from_entry <= -0.35, h, NULL)), 200) AS t_hit_dn_35,
+    COALESCE(MIN(IF(cumret_from_entry <= -0.40, h, NULL)), 200) AS t_hit_dn_40,
+    COALESCE(MIN(IF(cumret_from_entry <= -0.45, h, NULL)), 200) AS t_hit_dn_45,
     COALESCE(MIN(IF(cumret_from_entry <= -0.50, h, NULL)), 200) AS t_hit_dn_50,
 
     -- best/worst points and when they happen within 7d
@@ -210,8 +220,8 @@ SELECT
   ret_24h, ret_48h, ret_72h, ret_96h, ret_120h, ret_144h, ret_168h,
 
   -- kinetics (hours to thresholds)
-  t_hit_up_10, t_hit_up_25, t_hit_up_35, t_hit_up_50, t_hit_up_100, t_hit_up_200, t_hit_up_500,
-  t_hit_dn_10, t_hit_dn_25, t_hit_dn_35, t_hit_dn_50,
+  t_hit_up_10, t_hit_up_15, t_hit_up_20, t_hit_up_25, t_hit_up_35, t_hit_up_40, t_hit_up_45, t_hit_up_50, t_hit_up_100, t_hit_up_200, t_hit_up_500,
+  t_hit_dn_10, t_hit_dn_15, t_hit_dn_20, t_hit_dn_25, t_hit_dn_30, t_hit_dn_35, t_hit_dn_40, t_hit_dn_45, t_hit_dn_50,
 
   -- extremes
   max_gain_from_entry_7d,
