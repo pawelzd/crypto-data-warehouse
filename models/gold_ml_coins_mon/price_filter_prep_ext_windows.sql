@@ -86,21 +86,26 @@ candidate_rows AS (
 -- If extended windows overlap (rare but possible), a single price row might match multiple sessions.
 -- Deduplicate by assigning each (token, timestamp) to the "closest" core session boundary.
 -- Distance = seconds to nearest point of the core window [session_start, session_end].
-deduped AS (
+dedup_base AS (
   SELECT
     *,
-    -- Compute distance to the core window in seconds
     CASE
       WHEN price_timestamp < session_start
         THEN TIMESTAMP_DIFF(session_start, price_timestamp, SECOND)
       WHEN price_timestamp > session_end
         THEN TIMESTAMP_DIFF(price_timestamp, session_end, SECOND)
       ELSE 0
-    END AS distance_to_core,
+    END AS distance_to_core
+  FROM candidate_rows
+),
+
+-- Now you can safely reference distance_to_core in the window ORDER BY
+deduped AS (
+  SELECT
+    *,
     ROW_NUMBER() OVER (
       PARTITION BY token_address, price_timestamp
       ORDER BY
-        -- prefer rows that are actually in the core, then pre/post closest to core
         CASE
           WHEN in_core_monitoring THEN 0
           WHEN in_pre_extension OR in_post_extension THEN 1
@@ -109,7 +114,7 @@ deduped AS (
         distance_to_core ASC,
         monitoring_session_id ASC
     ) AS rn
-  FROM candidate_rows
+  FROM dedup_base
 )
 
 SELECT
@@ -131,4 +136,4 @@ SELECT
   in_post_extension
 FROM deduped
 WHERE rn = 1
-ORDER BY token_address, price_timestamp;
+ORDER BY token_address, price_timestamp

@@ -78,27 +78,38 @@ seq AS (
     -- price at entry (h = 0)
     MAX(IF(b.h = 0, b.price, NULL)) OVER (PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp) AS price0,
 
-    -- 1h log return along the 0..168h path
-    LOG(SAFE_DIVIDE(b.price, LAG(b.price) OVER w)) AS logret_1h,
+    -- add an explicit lag
+    LAG(b.price) OVER (
+      PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp
+      ORDER BY b.h
+    ) AS price_lag1,
+
+    -- safe 1h log return (no LN(0))
+    CASE
+      WHEN b.price > 0 AND LAG(b.price) OVER (
+        PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp
+        ORDER BY b.h
+      ) > 0
+      THEN LOG(b.price) - LOG(LAG(b.price) OVER (
+        PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp
+        ORDER BY b.h
+      ))
+      ELSE NULL
+    END AS logret_1h,
 
     -- cumulative return from the entry price
     SAFE_DIVIDE(b.price, MAX(IF(b.h = 0, b.price, NULL)) OVER (PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp)) - 1
       AS cumret_from_entry,
 
-    -- running peak for drawdowns (monotone running max of price)
+    -- running peak for drawdowns
     MAX(b.price) OVER (
       PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp
       ORDER BY b.h
       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS run_max_price,
 
-    -- struct for argmax/argmin
     STRUCT(b.price AS price, b.h AS h) AS price_h_struct
   FROM base b
-  WINDOW w AS (
-    PARTITION BY b.token_address, b.monitoring_session_id, b.first_acquired_timestamp
-    ORDER BY b.h
-  )
 ),
 
 -- 5) Aggregate per acquisition (one row per entry)
@@ -221,4 +232,4 @@ SELECT
   auc_cumret_avg, avg_cumret_0_24h, avg_cumret_25_72h, avg_cumret_73_168h
 
 FROM per_series
-ORDER BY token_address, first_acquired_timestamp;
+ORDER BY token_address, first_acquired_timestamp

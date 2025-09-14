@@ -65,8 +65,12 @@ rets AS (
     price,
     price_lag1,
     SAFE_DIVIDE(price, price_lag1) - 1 AS ret_1h,
-    -- use LOG of price ratio for stable aggregation of returns
-    LOG(SAFE_DIVIDE(price, price_lag1)) AS logret_1h
+
+    -- robust log-return: log(price) - log(price_lag1), only when both > 0
+    CASE
+      WHEN price > 0 AND price_lag1 > 0 THEN LOG(price) - LOG(price_lag1)
+      ELSE NULL
+    END AS logret_1h
   FROM lags
 ),
 
@@ -264,4 +268,4 @@ final AS (
 
 SELECT *
 FROM final
-ORDER BY token_address, ts_hour;
+ORDER BY token_address, ts_hour

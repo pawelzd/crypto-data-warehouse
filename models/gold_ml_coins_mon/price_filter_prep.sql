@@ -1,5 +1,5 @@
 {{ config(
-    materialized='view'
+    materialized='table'
 ) }}
 
 {#--- tweakable params ---#}
@@ -12,7 +12,7 @@ WITH base AS (
     tp.price_timestamp,
     tp.price_usd,
     (tp.price_usd * tmm.total_supply) AS mktcap
-  FROM {{ source('silver', 'fct__token_prices') }} AS tp
+  FROM {{ ref('fct__token_prices') }} AS tp
   INNER JOIN {{ source('gold', 'unique_tokens_base') }} AS utb
     ON utb.token_address = tp.token_address
   INNER JOIN {{ source('silver', 'fct__token_market_metadata') }} AS tmm
@@ -88,4 +88,4 @@ SELECT
   is_monitored,
   monitoring_session_id
 FROM sessionized
-ORDER BY token_address, price_timestamp;
+ORDER BY token_address, price_timestamp
