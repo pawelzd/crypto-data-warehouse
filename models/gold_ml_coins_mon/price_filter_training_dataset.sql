@@ -28,7 +28,7 @@ WITH past AS (
     rsi_14, acf1_72h,
     dow_1_sun_7_sat, hour_of_day, sin_hour, cos_hour, sin_dow, cos_dow,
     vol_ratio_24_7d, sharpe_delta,
-    miss_24h, miss_72h, miss_168h
+    miss_24h, miss_72h,
   FROM {{ ref('price_filter_features_7daysbefore') }}
 ),
 
@@ -113,7 +113,19 @@ SELECT
   -- WHERE has_full_lookback = 1 AND has_full_lookahead = 1 AND in_core_monitoring = TRUE
 
   -- All past features (already excludes key/flags duplicated above)
-  *
+  * EXCEPT(
+    token_address,
+    monitoring_session_id,
+    decision_ts,
+    up_h,
+    dn_h,
+    ret_168h,
+    max_gain_from_entry_7d,
+    max_drawdown_7d,
+    in_core_monitoring,
+    has_full_lookback,
+    has_full_lookahead
+  )
 FROM joined
 WHERE has_full_lookback = 1
   AND has_full_lookahead = 1

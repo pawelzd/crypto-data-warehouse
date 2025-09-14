@@ -238,6 +238,7 @@ final AS (
     r.dist_to_high_24h, r.dist_to_low_24h,
     r.breakout_high_24h, r.breakout_low_24h,
     r.drawdown_7d,
+    r.has_168h,
 
     -- RSI (SMA version)
     CASE

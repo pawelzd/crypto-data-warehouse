@@ -36,3 +36,12 @@ sources:
     tables:
       - name: unique_tokens_base
         description: "Unique tokens held across all wallets."
+
+
+  - name: silver
+    description: "Silver layer for cleaned and transformed data."
+    database: positive-tuner-255507
+    schema: silver
+    tables:
+      - name: fct__token_market_metadata
+        description: "Token market metadata."
