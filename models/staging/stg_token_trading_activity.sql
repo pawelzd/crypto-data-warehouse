@@ -17,3 +17,6 @@ SELECT
     _col_11 AS wallet_buy_txs_stddev_1h,
     _col_12 AS wallet_sell_txs_stddev_1h
 FROM source
+WHERE _col_1 >= '2022-01-01 00:00:00+00'
+  AND _col_0 IS NOT NULL
+  AND _col_1 IS NOT NULL

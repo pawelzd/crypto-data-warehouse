@@ -28,6 +28,8 @@ sources:
         description: "Raw wallet history features, loaded daily."
       - name: raw_tokens_metadata
         description: "Raw token market metadata (price, liquidity, supplies, caps)."
+      - name: raw_bitcoin_1min_prices
+        description: "Raw Bitcoin 1-minute interval prices."
 
   - name: silver
     description: "Silver layer for cleaned and enriched data."
@@ -38,6 +40,8 @@ sources:
         description: "Fact table of token prices with daily partitions."
       - name: fct__token_market_metadata
         description: "Fact table of token market metadata with daily partitions."
+      - name: fct__bitcoin_hourly_prices
+        description: "Fact table of Bitcoin hourly prices."
 
   - name: gold
     description: "Gold layer for curated data."
@@ -47,11 +51,3 @@ sources:
       - name: unique_tokens_base
         description: "Unique tokens held across all wallets."
 
-
-  - name: silver
-    description: "Silver layer for cleaned and transformed data."
-    database: positive-tuner-255507
-    schema: silver
-    tables:
-      - name: fct__token_market_metadata
-        description: "Token market metadata."

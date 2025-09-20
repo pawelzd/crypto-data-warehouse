@@ -1,12 +1,7 @@
 {{ config(
+    schema='gold_ml_coins_mon',
     materialized='table'
 ) }}
-
-{# -----------------------------------------------------------
-   Build forward 0..168h (7d) path features for labeling,
-   using price_filter_prep_ext_windows as the source.
-   Each core-monitoring hour becomes a potential entry.
-   ----------------------------------------------------------- #}
 
 -- 1) Hourly prices from the extended windows (keep session metadata & flags)
 WITH hourly AS (
@@ -29,8 +24,7 @@ WITH hourly AS (
     extended_start, extended_end, in_pre_extension, in_core_monitoring, in_post_extension, ts_hour
 ),
 
--- 2) Candidate acquisition timestamps: all core-monitoring hours that still have room
---    for a full 7-day lookahead within the same session's extended window.
+-- 2) Candidate acquisition timestamps
 acquisitions AS (
   SELECT
     token_address,
@@ -42,7 +36,6 @@ acquisitions AS (
     ts_hour AS first_acquired_timestamp
   FROM hourly
   WHERE in_core_monitoring = TRUE
-    -- ensure the forward window stays inside the session's extended_end
     AND TIMESTAMP_ADD(ts_hour, INTERVAL 168 HOUR) <= extended_end
 ),
 
@@ -65,8 +58,8 @@ base AS (
     CAST(TIMESTAMP_DIFF(h.ts_hour, a.first_acquired_timestamp, HOUR) AS INT64) AS h
   FROM acquisitions a
   JOIN hourly h
-    ON h.token_address           = a.token_address
-   AND h.monitoring_session_id    = a.monitoring_session_id
+    ON h.token_address         = a.token_address
+   AND h.monitoring_session_id  = a.monitoring_session_id
    AND h.ts_hour BETWEEN a.first_acquired_timestamp AND TIMESTAMP_ADD(a.first_acquired_timestamp, INTERVAL 168 HOUR)
 ),
 
@@ -131,16 +124,16 @@ per_series AS (
     -- entry price
     ANY_VALUE(price0) AS price0,
 
-    -- end states & daily checkpoints (returns from entry at specific hours)
-    MAX(IF(h = 24,  SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_24h,
-    MAX(IF(h = 48,  SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_48h,
-    MAX(IF(h = 72,  SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_72h,
-    MAX(IF(h = 96,  SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_96h,
-    MAX(IF(h = 120, SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_120h,
-    MAX(IF(h = 144, SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_144h,
-    MAX(IF(h = 168, SAFE_DIVIDE(price, price0) - 1, NULL))  AS ret_168h,
+    -- end states & daily checkpoints (NULL-safe -> default 0)
+    COALESCE(MAX(IF(h = 24,  SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_24h,   -- EDIT
+    COALESCE(MAX(IF(h = 48,  SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_48h,   -- EDIT
+    COALESCE(MAX(IF(h = 72,  SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_72h,   -- EDIT
+    COALESCE(MAX(IF(h = 96,  SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_96h,   -- EDIT
+    COALESCE(MAX(IF(h = 120, SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_120h,  -- EDIT
+    COALESCE(MAX(IF(h = 144, SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_144h,  -- EDIT
+    COALESCE(MAX(IF(h = 168, SAFE_DIVIDE(price, price0) - 1, NULL)), 0)  AS ret_168h,  -- EDIT
 
-    -- kinetics: first time to hit thresholds (in hours; fallback=200 if never hit)
+    -- kinetics: first time to hit thresholds (already default 200)
     COALESCE(MIN(IF(cumret_from_entry >= 0.10, h, NULL)), 200) AS t_hit_up_10,
     COALESCE(MIN(IF(cumret_from_entry >= 0.15, h, NULL)), 200) AS t_hit_up_15,
     COALESCE(MIN(IF(cumret_from_entry >= 0.20, h, NULL)), 200) AS t_hit_up_20,
@@ -172,9 +165,9 @@ per_series AS (
 
     -- max gain from entry & max drawdown vs running peak
     MAX(SAFE_DIVIDE(price, price0) - 1) AS max_gain_from_entry_7d,
-    MIN(SAFE_DIVIDE(price, run_max_price) - 1) AS max_drawdown_7d,  -- negative
+    MIN(SAFE_DIVIDE(price, run_max_price) - 1) AS max_drawdown_7d,
 
-    -- realized volatility & hourly distribution (exclude h=0 via NULLs in seq)
+    -- realized volatility & hourly distribution
     SQRT(SUM(POW(COALESCE(logret_1h, 0), 2))) * SQRT(24) AS rv_7d,
     STDDEV_SAMP(logret_1h) AS std_logret_1h_7d,
     AVG(logret_1h)         AS mean_logret_1h_7d,
@@ -182,9 +175,14 @@ per_series AS (
     -- tail risk
     APPROX_QUANTILES(ABS(logret_1h), 100)[OFFSET(95)] AS p95_abs_logret_1h,
 
-    -- directional persistence
-    SAFE_DIVIDE(SUM(CASE WHEN logret_1h > 0 THEN 1 ELSE 0 END),
-                NULLIF(SUM(CASE WHEN logret_1h IS NOT NULL THEN 1 ELSE 0 END), 0)) AS pct_pos_hours,
+    -- directional persistence (NULL-safe -> default 0)
+    COALESCE(
+      SAFE_DIVIDE(
+        SUM(CASE WHEN logret_1h > 0 THEN 1 ELSE 0 END),
+        NULLIF(SUM(CASE WHEN logret_1h IS NOT NULL THEN 1 ELSE 0 END), 0)
+      ),
+      0
+    ) AS pct_pos_hours, -- EDIT
 
     -- rough Sharpe-like over the 7d path (mean/std * sqrt(24))
     SAFE_DIVIDE(AVG(logret_1h), NULLIF(STDDEV_SAMP(logret_1h), 0)) * SQRT(24) AS sharpe_like_7d,
@@ -196,18 +194,18 @@ per_series AS (
     ) AS slope_logprice_per_h,
     POW(CORR(CAST(h AS FLOAT64), LOG(NULLIF(price, 0))), 2) AS r2_logprice_trend,
 
-    -- shape features
-    AVG(cumret_from_entry) AS auc_cumret_avg,
-    AVG(IF(h BETWEEN 0  AND 24,  cumret_from_entry, NULL)) AS avg_cumret_0_24h,
-    AVG(IF(h BETWEEN 25 AND 72,  cumret_from_entry, NULL)) AS avg_cumret_25_72h,
-    AVG(IF(h BETWEEN 73 AND 168, cumret_from_entry, NULL)) AS avg_cumret_73_168h
+    -- shape features (NULL-safe -> default 0)
+    COALESCE(AVG(cumret_from_entry), 0) AS auc_cumret_avg,                        -- EDIT
+    COALESCE(AVG(IF(h BETWEEN 0  AND 24,  cumret_from_entry, NULL)), 0) AS avg_cumret_0_24h,   -- EDIT
+    COALESCE(AVG(IF(h BETWEEN 25 AND 72,  cumret_from_entry, NULL)), 0) AS avg_cumret_25_72h,  -- EDIT
+    COALESCE(AVG(IF(h BETWEEN 73 AND 168, cumret_from_entry, NULL)), 0) AS avg_cumret_73_168h  -- EDIT
   FROM seq
   GROUP BY
     token_address, monitoring_session_id, first_acquired_timestamp,
     session_start, session_end, extended_start, extended_end
 )
 
--- 6) Final projection
+-- 6) Final projection (ensure remaining fields are NULL-safe)
 SELECT
   token_address,
   monitoring_session_id,
@@ -224,22 +222,26 @@ SELECT
   t_hit_dn_10, t_hit_dn_15, t_hit_dn_20, t_hit_dn_25, t_hit_dn_30, t_hit_dn_35, t_hit_dn_40, t_hit_dn_45, t_hit_dn_50,
 
   -- extremes
-  max_gain_from_entry_7d,
-  max_drawdown_7d,
-  t_peak_h, t_trough_h,
+  COALESCE(max_gain_from_entry_7d, 0) AS max_gain_from_entry_7d,  -- EDIT (paranoia)
+  COALESCE(max_drawdown_7d, 0)       AS max_drawdown_7d,          -- EDIT (paranoia)
+  COALESCE(t_peak_h, -1)             AS t_peak_h,                 -- EDIT
+  COALESCE(t_trough_h, -1)           AS t_trough_h,               -- EDIT
 
   -- volatility & tail
-  rv_7d,
-  COALESCE(std_logret_1h_7d,  0) AS std_logret_1h_7d,
-  COALESCE(mean_logret_1h_7d, 0) AS mean_logret_1h_7d,
-  COALESCE(p95_abs_logret_1h, 0) AS p95_abs_logret_1h,
-  pct_pos_hours,
-  COALESCE(sharpe_like_7d, 0) AS sharpe_like_7d,
+  COALESCE(rv_7d, 0)                 AS rv_7d,                    -- EDIT (paranoia)
+  COALESCE(std_logret_1h_7d,  0)     AS std_logret_1h_7d,
+  COALESCE(mean_logret_1h_7d, 0)     AS mean_logret_1h_7d,
+  COALESCE(p95_abs_logret_1h, 0)     AS p95_abs_logret_1h,
+  COALESCE(pct_pos_hours, 0)         AS pct_pos_hours,            -- EDIT
+  COALESCE(sharpe_like_7d, 0)        AS sharpe_like_7d,
 
   -- trend & shape
-  COALESCE(slope_logprice_per_h, 0) AS slope_logprice_per_h,
-  COALESCE(r2_logprice_trend,   0) AS r2_logprice_trend,
-  auc_cumret_avg, avg_cumret_0_24h, avg_cumret_25_72h, avg_cumret_73_168h
+  COALESCE(slope_logprice_per_h, 0)  AS slope_logprice_per_h,
+  COALESCE(r2_logprice_trend,   0)   AS r2_logprice_trend,
+  COALESCE(auc_cumret_avg, 0)        AS auc_cumret_avg,           -- EDIT
+  COALESCE(avg_cumret_0_24h, 0)      AS avg_cumret_0_24h,         -- EDIT
+  COALESCE(avg_cumret_25_72h, 0)     AS avg_cumret_25_72h,        -- EDIT
+  COALESCE(avg_cumret_73_168h, 0)    AS avg_cumret_73_168h        -- EDIT
 
 FROM per_series
 ORDER BY token_address, first_acquired_timestamp

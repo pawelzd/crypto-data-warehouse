@@ -1,4 +1,5 @@
 {{ config(
+    schema='gold_ml_coins_mon',
     materialized='table'
 ) }}
 
