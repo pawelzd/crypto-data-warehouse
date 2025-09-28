@@ -5,7 +5,7 @@
 
 
 SELECT
-  pft.* EXCEPT (label_profit20_before_loss25),
+  pft.*,
 
 
   -- === Key volume features (lean set) with COALESCE defaults ===
@@ -35,7 +35,7 @@ SELECT
   COALESCE(mta.vol_ema_slow, 0) AS vol_ema_slow,
 
   CASE
-    WHEN ts.organicScoreLabel = 'medium' OR ts.organicScoreLabel = 'high' THEN label_profit20_before_loss25
+    WHEN COALESCE(mta.vol_ret_24h, 0) >0 THEN label_profit20_before_loss25
     ELSE 0
   END AS label_profit20_before_loss25,
   
@@ -45,5 +45,3 @@ FROM {{ ref('price_filter_72_training_dataset_with_market') }} AS pft
 LEFT JOIN {{ ref('ml_tokens_72_trading_activity_features7d') }} AS mta
   ON pft.token_address = mta.token_address
  AND pft.decision_ts  = mta.ts_hour
-LEFT JOIN {{ source('silver', 'dim__token_score') }} AS ts
-  ON ts.token_address = pft.token_address  -- cross join to get BTC features for all rows (no filtering)
