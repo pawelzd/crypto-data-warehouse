@@ -3,10 +3,6 @@
     materialized='table'
 ) }}
 
-{{ config(
-    schema='gold_ml_coins_mon_72',
-    materialized='table'
-) }}
 
 SELECT
   pft.*,

@@ -48,6 +48,8 @@ sources:
         description: "Fact table of token market metadata with daily partitions."
       - name: fct__bitcoin_hourly_prices
         description: "Fact table of Bitcoin hourly prices."
+      - name: dim__token_score
+        description: "Dimension table of token scores and labels."
 
   - name: gold
     description: "Gold layer for curated data."
