@@ -42,9 +42,9 @@ future_min AS (
     t_hit_dn_15,
     t_hit_up_35,                -- for label (+35%)
     t_hit_up_25,                 -- for label (−25%)
-    t_hit_up_20,                 -- for label (−25%)
-    t_hit_up_15,                 -- for label (−25%)
-    t_hit_up_10,                 -- for label (−25%)
+    t_hit_up_20,                 
+    t_hit_up_15,                 
+    t_hit_up_10,                 
   FROM {{ ref('price_filter_72_features_3daysafter') }}
 ),
 
@@ -103,6 +103,11 @@ SELECT
     WHEN t_hit_up_25_nn < 75 AND t_hit_up_25_nn < t_hit_dn_25_nn THEN 1
     ELSE 0
   END AS label_profit25_before_loss25,
+
+  CASE 
+    WHEN t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_15_nn THEN 1
+    ELSE 0
+  END AS label_profit10_before_loss15,
 
   -- Flags for cleanliness (already validated upstream)
   in_core_monitoring,

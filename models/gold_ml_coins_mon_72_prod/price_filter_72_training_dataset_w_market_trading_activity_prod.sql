@@ -1,12 +1,8 @@
 {{ config(
-    schema='gold_ml_coins_mon_72',
-    materialized='table'
+    schema='gold_ml_coins_mon_72_prod',
+    materialized='view'
 ) }}
 
-{{ config(
-    schema='gold_ml_coins_mon_72',
-    materialized='table'
-) }}
 
 SELECT
   pft.*,
@@ -45,7 +41,7 @@ SELECT
   
 
 
-FROM {{ ref('price_filter_72_training_dataset_with_market') }} AS pft
+FROM {{ ref('price_filter_72_training_dataset_with_market_prod') }} AS pft
 LEFT JOIN {{ ref('ml_tokens_72_trading_activity_features7d') }} AS mta
   ON pft.token_address = mta.token_address
  AND pft.decision_ts  = mta.ts_hour

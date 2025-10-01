@@ -30,7 +30,13 @@ sources:
         description: "Raw token market metadata (price, liquidity, supplies, caps)."
       - name: raw_bitcoin_1min_prices
         description: "Raw Bitcoin 1-minute interval prices."
-
+  - name: streamed_datapublic
+    description: "Silver layer for cleaned and enriched data, production."
+    database: positive-tuner-255507
+    schema: streamed_datapublic
+    tables:
+      - name: historical_prices
+        description: "Fact table of token prices with daily partitions, production."
   - name: silver
     description: "Silver layer for cleaned and enriched data."
     database: positive-tuner-255507
