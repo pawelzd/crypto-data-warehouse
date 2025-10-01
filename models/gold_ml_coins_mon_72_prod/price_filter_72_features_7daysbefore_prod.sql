@@ -3,16 +3,12 @@
     materialized='view'
 ) }}
 WITH base AS (
-  SELECT
+  SELECT DISTINCT
     f.address AS token_address,
     TIMESTAMP_TRUNC(f.datetime, HOUR) AS ts_hour,
     f.price AS price,
   FROM {{ ref('token_prices_formated_prod') }} f
   WHERE price IS NOT NULL
-  GROUP BY
-    token_address, 
-    ts_hour, 
-    price
 ),
 
 lags AS (

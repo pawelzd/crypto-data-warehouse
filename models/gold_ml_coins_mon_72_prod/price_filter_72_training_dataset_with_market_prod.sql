@@ -44,6 +44,6 @@ SELECT
 FROM
      {{ ref('price_filter_72_training_dataset_prod') }} AS bt
 LEFT JOIN
-    {{ ref('ml_solana_price_features7d_prod') }} AS mt
+    {{ ref('ml_solana_price_features7d') }} AS mt
     ON  bt.decision_ts = mt.ts_hour
 
