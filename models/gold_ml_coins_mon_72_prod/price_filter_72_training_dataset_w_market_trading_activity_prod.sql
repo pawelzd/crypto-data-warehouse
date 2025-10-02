@@ -6,8 +6,7 @@
 
 SELECT
   pft.*,
-
-
+  
   -- === Key volume features (lean set) with COALESCE defaults ===
   COALESCE(mta.log_volume, 0) AS log_volume,
   COALESCE(mta.log_volume_per_supply, 0) AS log_volume_per_supply,

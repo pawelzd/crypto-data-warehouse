@@ -6,14 +6,14 @@
 
 SELECT 
     bt.*,
-    COALESCE(mt.ret_1h, 0) AS sol_ret_1h,
+   -- COALESCE(mt.ret_1h, 0) AS sol_ret_1h,
     COALESCE(mt.logret_1h, 0) AS sol_logret_1h,
-    COALESCE(mt.mean_ret_24h, 0) AS sol_mean_ret_24h,
-    COALESCE(mt.std_ret_24h, 0) AS sol_std_ret_24h,
-    COALESCE(mt.mean_ret_72h, 0) AS sol_mean_ret_72h,
-    COALESCE(mt.std_ret_72h, 0) AS sol_std_ret_72h,
-    COALESCE(mt.mean_ret_168h, 0) AS sol_mean_ret_168h,
-    COALESCE(mt.std_ret_168h, 0) AS sol_std_ret_168h,
+    -- COALESCE(mt.mean_ret_24h, 0) AS sol_mean_ret_24h,
+    -- COALESCE(mt.std_ret_24h, 0) AS sol_std_ret_24h,
+    -- COALESCE(mt.mean_ret_72h, 0) AS sol_mean_ret_72h,
+    -- COALESCE(mt.std_ret_72h, 0) AS sol_std_ret_72h,
+    -- COALESCE(mt.mean_ret_168h, 0) AS sol_mean_ret_168h,
+    -- COALESCE(mt.std_ret_168h, 0) AS sol_std_ret_168h,
     COALESCE(mt.rv_24h, 0) AS sol_rv_24h,
     COALESCE(mt.rv_7d, 0) AS sol_rv_7d,
     COALESCE(mt.sharpe_24h, 0) AS sol_sharpe_24h,
@@ -23,9 +23,9 @@ SELECT
     COALESCE(mt.cumret_7d, 0) AS sol_cumret_7d,
     COALESCE(mt.macd_sma_12_26h, 0) AS sol_macd_sma_12_26h,
     COALESCE(mt.dist_to_sma_6h, 0) AS sol_dist_to_sma_6h,
-    COALESCE(mt.dist_to_sma_12h, 0) AS sol_dist_to_sma_12h,
+    -- COALESCE(mt.dist_to_sma_12h, 0) AS sol_dist_to_sma_12h,
     COALESCE(mt.dist_to_sma_24h, 0) AS sol_dist_to_sma_24h,
-    COALESCE(mt.dist_to_sma_72h, 0) AS sol_dist_to_sma_72h,
+    -- COALESCE(mt.dist_to_sma_72h, 0) AS sol_dist_to_sma_72h,
     COALESCE(mt.dist_to_sma_168h, 0) AS sol_dist_to_sma_168h,
     COALESCE(mt.pct_in_range_24h, 0) AS sol_pct_in_range_24h,
     COALESCE(mt.dist_to_high_24h, 0) AS sol_dist_to_high_24h,
@@ -44,6 +44,6 @@ SELECT
 FROM
      {{ ref('price_filter_72_training_dataset_prod') }} AS bt
 LEFT JOIN
-    {{ ref('ml_solana_price_features7d') }} AS mt
+    {{ ref('ml_solana_price_features7d_prod') }} AS mt
     ON  bt.decision_ts = mt.ts_hour
 
