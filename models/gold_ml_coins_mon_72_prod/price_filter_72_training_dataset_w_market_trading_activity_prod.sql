@@ -41,6 +41,6 @@ SELECT
 
 
 FROM {{ ref('price_filter_72_training_dataset_with_market_prod') }} AS pft
-LEFT JOIN {{ ref('ml_tokens_72_trading_activity_features7d') }} AS mta
+LEFT JOIN {{ ref('ml_tokens_72_trading_activity_features7d_prod') }} AS mta
   ON pft.token_address = mta.token_address
  AND pft.decision_ts  = mta.ts_hour

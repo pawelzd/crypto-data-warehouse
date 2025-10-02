@@ -7,7 +7,7 @@ WITH base AS (
     address AS token_address,
     TIMESTAMP_TRUNC(datetime, HOUR) AS ts_hour,
     AVG(CAST(price AS FLOAT64)) AS price
-  FROM {{ source('streamed_datapublic', 'historical_prices') }}
+  FROM {{ ref('token_prices_formated_filled') }}
   WHERE price IS NOT NULL
   GROUP BY
     token_address, ts_hour
