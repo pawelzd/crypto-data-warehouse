@@ -17,4 +17,4 @@ dbt_bq_profile:
       threads: 4
       timeout_seconds: 300
       location: europe-central2
-      keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-3f858f07cec5.json
+      keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-2d5dd30897eb.json
