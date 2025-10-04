@@ -2,11 +2,19 @@ dbt_bq_profile:
   target: dev
   outputs:
     dev:
+      # type: bigquery
+      # method: service-account
+      # project: positive-tuner-255507
+      # dataset: wallets_extraction
+      # threads: 4
+      # timeout_seconds: 300
+      # location: europe-central2
+      # keyfile: /opt/dbt/dbt_bq/positive-tuner-255507-3f858f07cec5.json
       type: bigquery
       method: service-account
-      project: positive-tuner-255507
-      dataset: wallets_extraction
+      project: crypto-trading-474111
+      dataset: raw
       threads: 4
       timeout_seconds: 300
       location: europe-central2
-      keyfile: /opt/dbt/dbt_bq/positive-tuner-255507-3f858f07cec5.json
+      keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-3f858f07cec5.json

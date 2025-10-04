@@ -1,6 +1,6 @@
 {{ config(
     schema='gold_ml_coins_mon_72_prod',
-    materialized='table'
+    materialized='view'
 ) }}
 WITH base AS (
   SELECT

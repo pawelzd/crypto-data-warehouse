@@ -59,3 +59,11 @@ sources:
       - name: unique_tokens_base
         description: "Unique tokens held across all wallets."
 
+
+  - name: raw
+    description: "Source for raw Birdeye OHLCV data."
+    database: crypto-trading-474111
+    schema: raw
+    tables:
+      - name: raw_birdeye_ohlcv
+        description: "Raw snapshot of wallet asset holdings."
