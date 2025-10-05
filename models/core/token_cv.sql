@@ -5,7 +5,7 @@
 
 
 with source_data as (
-    select * from {{ ref('stg_birdeye_ohlcv') }}
+    select * from {{ ref('birdeye_ohlcv') }}
 )
 
 select

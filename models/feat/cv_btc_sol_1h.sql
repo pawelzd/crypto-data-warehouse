@@ -3,9 +3,9 @@ WITH base AS (
     token_address,
     TIMESTAMP_TRUNC(price_timestamp, HOUR) AS ts_hour,
     AVG(CAST(price_usd AS FLOAT64)) AS price
-  FROM {{ ref('core_birdeye_ohlcv') }}
+  FROM {{ ref('token_cv') }}
   WHERE price_usd IS NOT NULL
-  AND token_address IN ('So11111111111111111111111111111111111111112', 'Bitcoin')
+  AND token_address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
   GROUP BY token_address, ts_hour
 ),
 lags AS (
