@@ -13,7 +13,9 @@ WITH base AS (
   FROM {{ ref('token_cv') }} AS tp
   INNER JOIN {{ ref('unique_token_mc') }} AS utb
     ON utb.token_address = tp.token_address
+    AND utb.price_timestamp = tp.price_timestamp
   WHERE utb.max_mc > {{ mc_threshold }}
+
 ),
 with_flags AS (
   SELECT
@@ -80,7 +82,7 @@ sessionized AS (
     END AS monitoring_session_id
   FROM with_sessions
 )
-SELECT
+SELECT DISTINCT
   token_address,
   price_timestamp,
   price_usd,

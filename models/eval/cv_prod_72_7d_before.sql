@@ -1,40 +1,22 @@
 WITH base AS (
   SELECT
-    c.token_address,
-    c.monitoring_session_id,
-    c.session_start,
-    c.session_end,
-    c.extended_start,
-    c.extended_end,
-    c.in_pre_extension,
-    c.in_core_monitoring,
-    c.in_post_extension,
+    c.address AS token_address,
     SAFE_CAST(c.volume AS FLOAT64) AS volume,
-    TIMESTAMP_TRUNC(c.price_timestamp, HOUR) AS ts_hour,
-    AVG(SAFE_CAST(c.price_usd AS FLOAT64)) AS price,
+    c.datetime AS ts_hour,
+    AVG(SAFE_CAST(c.price AS FLOAT64)) AS price,
     SAFE_CAST(t.circSupply AS FLOAT64) AS total_supply
-  FROM {{ ref('cv_filter_prep_72_ext_windows') }} c
+  FROM {{ ref('cv_prod_filled_hours') }} c
   LEFT JOIN {{ source('core', 'token_metadata_jup_tmp') }} t
-    ON c.token_address = t.id
-    AND t.organicScoreLabel <> 'low'
-  
+    ON c.address = t.id
+  WHERE t.organicScoreLabel <> 'low'
   GROUP BY
-    c.token_address, c.monitoring_session_id, c.session_start, c.session_end,
-    c.extended_start, c.extended_end, c.in_pre_extension, c.in_core_monitoring, c.in_post_extension,
+    c.address, 
     ts_hour, t.circSupply, c.volume
 ),
 
 lags AS (
   SELECT
     token_address,
-    monitoring_session_id,
-    session_start,
-    session_end,
-    extended_start,
-    extended_end,
-    in_pre_extension,
-    in_core_monitoring,
-    in_post_extension,
     ts_hour,
     price,
     volume,
@@ -54,14 +36,6 @@ lags AS (
 rets AS (
   SELECT
     token_address,
-    monitoring_session_id,
-    session_start,
-    session_end,
-    extended_start,
-    extended_end,
-    in_pre_extension,
-    in_core_monitoring,
-    in_post_extension,
     ts_hour,
     price,
     price_lag1,
@@ -114,14 +88,6 @@ rets_with_lag AS (
 roll AS (
   SELECT
     token_address,
-    monitoring_session_id,
-    session_start,
-    session_end,
-    extended_start,
-    extended_end,
-    in_pre_extension,
-    in_core_monitoring,
-    in_post_extension,
     ts_hour,
     price,
     ret_1h,
@@ -253,14 +219,6 @@ roll AS (
 rsi AS (
   SELECT
     token_address,
-    monitoring_session_id,
-    session_start,
-    session_end,
-    extended_start,
-    extended_end,
-    in_pre_extension,
-    in_core_monitoring,
-    in_post_extension,
     ts_hour,
     price,
     ret_1h, logret_1h,
@@ -311,14 +269,6 @@ rsi AS (
 final AS (
   SELECT
     r.token_address,
-    r.monitoring_session_id,
-    r.session_start,
-    r.session_end,
-    r.extended_start,
-    r.extended_end,
-    r.in_pre_extension,
-    r.in_core_monitoring,
-    r.in_post_extension,
     r.ts_hour,
     r.price,
 

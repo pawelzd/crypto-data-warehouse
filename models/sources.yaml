@@ -68,3 +68,18 @@ sources:
         description: "Raw snapshot of wallet asset holdings."
       - name: raw_birdeye_market_data
         description: "Raw Birdeye market data."
+  - name: core
+    description: "Source for core data."
+    database: crypto-trading-474111
+    schema: core
+    tables:
+      - name: token_metadata_jup_tmp
+        description: "Token metadata from Jupiter API, temporary table."
+        
+  - name: streamed_datapublic
+    description: "Silver layer for cleaned and enriched data, production."
+    database: crypto-trading-474111
+    schema: streamed_datapublic
+    tables:
+      - name: historical_prices
+        description: "Fact table of token prices with daily partitions, production."

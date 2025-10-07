@@ -19,6 +19,7 @@ WITH hourly AS (
   GROUP BY
     token_address, monitoring_session_id, session_start, session_end,
     extended_start, extended_end, in_pre_extension, in_core_monitoring, in_post_extension, ts_hour
+  
 ),
 
 -- 2) Candidate acquisition timestamps
@@ -242,4 +243,4 @@ SELECT
   COALESCE(avg_cumret_48_72h, 0)    AS avg_cumret_48_72h,       -- EDIT
 
 FROM per_series
-ORDER BY token_address, first_acquired_timestamp
+

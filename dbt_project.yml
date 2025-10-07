@@ -20,7 +20,7 @@ models:
   dbt_to_bq:
 
     feat:
-      +materialized: view
+      +materialized: table
       +schema: feat
     stg:
       +materialized: view
@@ -28,6 +28,12 @@ models:
     core:
       +materialized: table
       +schema: core
+    eval:
+      +materialized: view
+      +schema: eval
+    ml:
+      +materialized: table
+      +schema: ml
 
     # staging:
     #   +materialized: view
