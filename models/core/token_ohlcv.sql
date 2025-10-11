@@ -11,7 +11,10 @@ with source_data as (
 select
     s.token_address,
     s.price_timestamp,
-    s.close as price_usd, 
+    s.close, 
+    s.high, 
+    s.open, 
+    s.low, 
     s.volume
     
 from source_data as s
