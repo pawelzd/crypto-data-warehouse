@@ -5,7 +5,7 @@ WITH base AS (
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
          price,
          volume
-  FROM {{ source('streamed_datapublic', 'historical_prices') }}
+  FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
   QUALIFY ROW_NUMBER() OVER (
             PARTITION BY address, TIMESTAMP_TRUNC(datetime, HOUR)
             ORDER BY datetime DESC

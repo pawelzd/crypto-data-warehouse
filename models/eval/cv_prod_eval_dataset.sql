@@ -8,6 +8,7 @@ WITH past AS (
     rv_24h, rv_4h, rv_12h, rv_7d,
     sharpe_24h, sharpe_7d, ret_z_24h, cumret_24h, cumret_7d,
     sma_6h, sma_12h, sma_24h, sma_48h, sma_72h, sma_168h,
+     sma6h_slope_24h, sma12h_slope_24h,
     macd_sma_12_26h, price_z_24h, pct_in_range_24h,
     dist_to_sma_6h, dist_to_sma_12h, dist_to_sma_24h, dist_to_sma_72h, dist_to_sma_168h,
     dist_to_high_24h, dist_to_low_24h, dist_to_high_4h, dist_to_low_4h, dist_to_high_12h, dist_to_low_12h,
@@ -41,6 +42,7 @@ final AS (
     -- keep all the explicit features from joined (everything after flags above)
     {{- "\n    " -}}
     price, ret_1h, logret_1h,
+     sma6h_slope_24h, sma12h_slope_24h,
     mean_ret_24h, std_ret_24h, mean_ret_72h, std_ret_72h, mean_ret_168h, std_ret_168h,
     rv_24h, rv_4h, rv_12h, rv_7d,
     sharpe_24h, sharpe_7d, ret_z_24h, cumret_24h, cumret_7d,

@@ -18,7 +18,7 @@ clean-targets:
 
 models:
   dbt_to_bq:
-
+  
     feat:
       +materialized: table
       +schema: feat
@@ -34,7 +34,7 @@ models:
     ml:
       +materialized: table
       +schema: ml
-
+    
     # staging:
     #   +materialized: view
     #   +schema: bronze

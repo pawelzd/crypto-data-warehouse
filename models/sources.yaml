@@ -69,11 +69,18 @@ sources:
     tables:
       - name: token_metadata_jup_tmp
         description: "Token metadata from Jupiter API, temporary table."
-        
+
+  - name: eval
+    description: "Evaluation database for ml model testing and validation."
+    database: crypto-trading-474111
+    schema: eval
+    tables:
+      - name: forest_72_gain20_loss25_og_duplicate_prod_results
+  
   - name: streamed_datapublic
     description: "Silver layer for cleaned and enriched data, production."
     database: crypto-trading-474111
     schema: streamed_datapublic
     tables:
-      - name: historical_prices
+      - name: public_historical_prices
         description: "Fact table of token prices with daily partitions, production."
