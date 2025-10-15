@@ -22,6 +22,9 @@ models:
     feat:
       +materialized: table
       +schema: feat
+    20m_feat:
+      +materialized: table
+      +schema: 20m_feat
     stg:
       +materialized: view
       +schema: stg
