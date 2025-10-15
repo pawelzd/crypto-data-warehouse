@@ -1,16 +1,14 @@
 WITH past AS (
   SELECT
     token_address,
-    monitoring_session_id,
     ts_hour AS decision_ts,
-    in_core_monitoring,
     has_168h AS has_full_lookback,
     price, ret_1h, logret_1h,
     mean_ret_24h, std_ret_24h, mean_ret_72h, std_ret_72h, mean_ret_168h, std_ret_168h,
     rv_24h, rv_4h, rv_12h, rv_7d,
-    sma6h_slope_24h, sma12h_slope_24h,
     sharpe_24h, sharpe_7d, ret_z_24h, cumret_24h, cumret_7d,
     sma_6h, sma_12h, sma_24h, sma_48h, sma_72h, sma_168h,
+     sma6h_slope_24h, sma12h_slope_24h,
     macd_sma_12_26h, price_z_24h, pct_in_range_24h,
     dist_to_sma_6h, dist_to_sma_12h, dist_to_sma_24h, dist_to_sma_72h, dist_to_sma_168h,
     dist_to_high_24h, dist_to_low_24h, dist_to_high_4h, dist_to_low_4h, dist_to_high_12h, dist_to_low_12h,
@@ -32,104 +30,21 @@ WITH past AS (
     volume_std_24h, volume_std_168h, volume_n_24h,
     volume_ema_fast, volume_ema_slow,
     sharpe_delta
-  FROM {{ ref('20m_cv_filter_72_7d_before') }}
-),
-
--- Deduplicate the future table on the join keys
-future_min AS (
-  SELECT *
-  FROM (
-    SELECT
-      token_address,
-      monitoring_session_id,
-      first_acquired_timestamp,
-      has_full_3d,
-      t_hit_dn_25, t_hit_dn_20, t_hit_dn_15,
-      t_hit_up_35, t_hit_up_25, t_hit_up_20, t_hit_up_15, t_hit_up_10,
-      ret_72h,
-      ROW_NUMBER() OVER (
-        PARTITION BY token_address, monitoring_session_id, first_acquired_timestamp
-        ORDER BY first_acquired_timestamp
-      ) AS rn
-    FROM {{ ref('20m_cv_filter_72_3d_after') }}
-  )
-  WHERE rn = 1
-),
-
-joined AS (
-  SELECT
-    p.token_address,
-    p.monitoring_session_id,
-    p.decision_ts,
-    p.in_core_monitoring,
-    p.has_full_lookback,
-    f.has_full_3d AS has_full_lookahead,
-    f.ret_72h,
-    LEAST(COALESCE(f.t_hit_up_35, 75), 75) AS t_hit_up_35_nn,
-    LEAST(COALESCE(f.t_hit_up_25, 75), 75) AS t_hit_up_25_nn,
-    LEAST(COALESCE(f.t_hit_up_20, 75), 75) AS t_hit_up_20_nn,
-    LEAST(COALESCE(f.t_hit_up_15, 75), 75) AS t_hit_up_15_nn,
-    LEAST(COALESCE(f.t_hit_up_10, 75), 75) AS t_hit_up_10_nn,
-    LEAST(COALESCE(f.t_hit_dn_25, 75), 75) AS t_hit_dn_25_nn,
-    LEAST(COALESCE(f.t_hit_dn_20, 75), 75) AS t_hit_dn_20_nn,
-    LEAST(COALESCE(f.t_hit_dn_15, 75), 75) AS t_hit_dn_15_nn,
-
-    -- bring the rest explicitly from past (no SELECT *)
-    p.price, p.ret_1h, p.logret_1h,
-    p.sma6h_slope_24h, p.sma12h_slope_24h,
-    p.mean_ret_24h, p.std_ret_24h, p.mean_ret_72h, p.std_ret_72h, p.mean_ret_168h, p.std_ret_168h,
-    p.rv_24h, p.rv_4h, p.rv_12h, p.rv_7d,
-    p.sharpe_24h, p.sharpe_7d, p.ret_z_24h, p.cumret_24h, p.cumret_7d,
-    p.sma_6h, p.sma_12h, p.sma_24h, p.sma_48h, p.sma_72h, p.sma_168h,
-    p.macd_sma_12_26h, p.price_z_24h, p.pct_in_range_24h,
-    p.dist_to_sma_6h, p.dist_to_sma_12h, p.dist_to_sma_24h, p.dist_to_sma_72h, p.dist_to_sma_168h,
-    p.dist_to_high_24h, p.dist_to_low_24h, p.dist_to_high_4h, p.dist_to_low_4h, p.dist_to_high_12h, p.dist_to_low_12h,
-    p.breakout_high_24h, p.breakout_low_24h,
-    p.drawdown_7d, p.drawdown_48h, p.drawdown_24h, p.rsi_14, p.rsi_vol_interaction,
-    p.dow_1_sun_7_sat, p.hour_of_day, p.sin_hour, p.cos_hour, p.sin_dow, p.cos_dow,
-    p.vol_ratio_24_7d, p.vol_ratio_24_72, p.vol_ratio_72_168, p.vol_ratio_4_24, p.vol_ratio_12_24, p.ret_over_rv_12h,
-    p.sma_diff_12_48, p.sma_diff_fast_slow,
-    p.sma6h_slope_12h, p.sma12h_slope_12h, p.sma12h_slope_72h, p.sma24h_slope_24h, p.sma48h_slope_24h,
-    p.volume_ret_1h, p.volume_ret_24h,
-    p.log_volume, p.log_volume_per_supply,
-    p.log_volume_mean_24h, p.log_volume_mean_168h,
-    p.log_volume_mean_24h_per_supply, p.log_volume_mean_168h_per_supply,
-    p.volume_cv_24h, p.volume_cv_168h, p.volume_spike_ratio_24h_excl, p.volume_z_24h,
-    p.volume_accel_6v24, p.volume_accel_24v168,
-    p.volume_sum_6h, p.volume_sum_24h, p.volume_sum_168h,
-    p.volume_mean_24h, p.volume_mean_168h,
-    p.volume_std_24h, p.volume_std_168h, p.volume_n_24h,
-    p.volume_ema_fast, p.volume_ema_slow,
-    p.sharpe_delta
-  FROM past p
-  JOIN future_min f
-    ON p.token_address = f.token_address
-   AND p.monitoring_session_id = f.monitoring_session_id
-   AND p.decision_ts = f.first_acquired_timestamp
+  FROM {{ ref('20m_cv_prod_72_7d_before') }}
 ),
 
 final AS (
   SELECT
     token_address,
-    monitoring_session_id,
     decision_ts,
-
-    CASE WHEN (t_hit_up_35_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_35_nn < 75 AND t_hit_up_35_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit35_before_loss25,
-    CASE WHEN (t_hit_up_20_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_20_nn < 75 AND t_hit_up_20_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit20_before_loss25,
-    CASE WHEN (t_hit_up_15_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_15_nn < 75 AND t_hit_up_15_nn < t_hit_dn_20_nn) THEN 1 ELSE 0 END AS label_profit15_before_loss20,
-    CASE WHEN (t_hit_up_25_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_25_nn < 75 AND t_hit_up_25_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit25_before_loss25,
-    CASE WHEN (t_hit_up_10_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_15_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss15,
-
-    in_core_monitoring,
     has_full_lookback,
-    has_full_lookahead,
 
     -- keep all the explicit features from joined (everything after flags above)
     {{- "\n    " -}}
     price, ret_1h, logret_1h,
+     sma6h_slope_24h, sma12h_slope_24h,
     mean_ret_24h, std_ret_24h, mean_ret_72h, std_ret_72h, mean_ret_168h, std_ret_168h,
     rv_24h, rv_4h, rv_12h, rv_7d,
-    sma6h_slope_24h, sma12h_slope_24h,
     sharpe_24h, sharpe_7d, ret_z_24h, cumret_24h, cumret_7d,
     sma_6h, sma_12h, sma_24h, sma_48h, sma_72h, sma_168h,
     macd_sma_12_26h, price_z_24h, pct_in_range_24h,
@@ -152,11 +67,9 @@ final AS (
     volume_std_24h, volume_std_168h, volume_n_24h,
     volume_ema_fast, volume_ema_slow,
     sharpe_delta
-  FROM joined
+  FROM past
   WHERE has_full_lookback = 1
-    AND has_full_lookahead = 1
-    AND in_core_monitoring = TRUE
-),
+  ),
 
 -- Pre-filter BTC and SOL once, and dedupe to one row per ts_hour
 btc_mt AS (

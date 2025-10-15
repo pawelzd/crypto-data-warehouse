@@ -34,6 +34,9 @@ models:
     eval:
       +materialized: view
       +schema: eval
+    20m_eval:
+      +materialized: table
+      +schema: 20m_eval
     ml:
       +materialized: table
       +schema: ml
