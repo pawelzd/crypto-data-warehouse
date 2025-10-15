@@ -299,6 +299,7 @@ rsi AS (
     volume_std_24h, volume_std_168h,
     volume_n_24h,
     volume_ema_fast, volume_ema_slow,
+    rv_72h,
 
     GREATEST(ret_1h, 0)  AS gain,
     GREATEST(-ret_1h, 0) AS loss,
@@ -333,9 +334,10 @@ final AS (
     COALESCE(r.std_ret_72h, 0)    AS std_ret_72h,
     COALESCE(r.mean_ret_168h, 0)  AS mean_ret_168h,
     COALESCE(r.std_ret_168h, 0)   AS std_ret_168h,
-    COALESCE(r.rv_24h, 0)         AS rv_24h,
     COALESCE(r.rv_4h, 0)          AS rv_4h,
     COALESCE(r.rv_12h, 0)         AS rv_12h,
+    COALESCE(r.rv_24h, 0)         AS rv_24h,
+    COALESCE(r.rv_72h, 0)         AS rv_72h,      -- <-- add this line
     COALESCE(r.rv_7d, 0)          AS rv_7d,
     COALESCE(r.sharpe_24h, 0)     AS sharpe_24h,
     COALESCE(r.sharpe_7d, 0)      AS sharpe_7d,
@@ -356,8 +358,6 @@ final AS (
     COALESCE(r.volume_z_24h, 0) AS volume_z_24h,
     COALESCE(r.volume_accel_6v24, 0) AS volume_accel_6v24,
     COALESCE(r.volume_accel_24v168, 0) AS volume_accel_24v168,
-    --COALESCE(r.volume, 0) AS volume,
-    --COALESCE(r.total_supply, 0) AS total_supply,
     COALESCE(r.volume_sum_6h, 0) AS volume_sum_6h,
     COALESCE(r.volume_sum_24h, 0) AS volume_sum_24h,
     COALESCE(r.volume_sum_168h, 0) AS volume_sum_168h,
@@ -420,11 +420,9 @@ final AS (
     COALESCE(SAFE_DIVIDE(r.rv_4h,  NULLIF(r.rv_24h, 0)), 0) AS vol_ratio_4_24,
     COALESCE(SAFE_DIVIDE(r.rv_12h, NULLIF(r.rv_24h, 0)), 0) AS vol_ratio_12_24,
     COALESCE(SAFE_DIVIDE(r.mean_ret_12h, NULLIF(r.rv_12h, 0)), 0) AS ret_over_rv_12h
-
-    -- NEW: expose supply & volume features
-    -- r.volume,
   FROM rsi r
 ),
+
 
 distances_and_slopes AS (
   SELECT

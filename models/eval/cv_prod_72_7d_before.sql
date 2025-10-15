@@ -8,7 +8,6 @@ WITH base AS (
   FROM {{ ref('cv_prod_filled_hours') }} c
   LEFT JOIN {{ source('core', 'token_metadata_jup_tmp') }} t
     ON c.address = t.id
-  WHERE t.organicScoreLabel <> 'low'
   GROUP BY
     c.address, 
     ts_hour, t.circSupply, c.volume

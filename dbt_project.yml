@@ -34,7 +34,10 @@ models:
     ml:
       +materialized: table
       +schema: ml
-    
+    ema:
+      +materialized: table
+      +schema: ema
+
     # staging:
     #   +materialized: view
     #   +schema: bronze

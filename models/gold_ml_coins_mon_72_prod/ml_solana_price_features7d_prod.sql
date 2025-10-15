@@ -7,7 +7,7 @@ WITH base AS (
 SELECT h.address AS token_address,
     TIMESTAMP_TRUNC(h.datetime, HOUR) AS ts_hour,
     AVG(CAST(h.price AS FLOAT64)) AS price
-FROM {{ source('streamed_datapublic', 'historical_prices') }} h
+FROM {{ source('streamed_datapublic', 'public_historical_prices') }} h
 WHERE h.address = "So11111111111111111111111111111111111111112"
 and h.price IS NOT NULL
 GROUP BY token_address, ts_hour
