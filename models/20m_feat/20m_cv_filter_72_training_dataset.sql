@@ -114,11 +114,12 @@ final AS (
     monitoring_session_id,
     decision_ts,
 
-    CASE WHEN (t_hit_up_35_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_35_nn < 75 AND t_hit_up_35_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit35_before_loss25,
-    CASE WHEN (t_hit_up_20_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_20_nn < 75 AND t_hit_up_20_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit20_before_loss25,
-    CASE WHEN (t_hit_up_15_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_15_nn < 75 AND t_hit_up_15_nn < t_hit_dn_20_nn) THEN 1 ELSE 0 END AS label_profit15_before_loss20,
-    CASE WHEN (t_hit_up_25_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_25_nn < 75 AND t_hit_up_25_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit25_before_loss25,
-    CASE WHEN (t_hit_up_10_nn >= 75 AND ret_72h >= 0) OR (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_15_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss15,
+    CASE WHEN (t_hit_up_35_nn < 75 AND t_hit_up_35_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit35_before_loss25,
+    CASE WHEN (t_hit_up_20_nn < 75 AND t_hit_up_20_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit20_before_loss25,
+    CASE WHEN (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss25,
+    CASE WHEN (t_hit_up_15_nn < 75 AND t_hit_up_15_nn < t_hit_dn_20_nn) THEN 1 ELSE 0 END AS label_profit15_before_loss20,
+    CASE WHEN (t_hit_up_25_nn < 75 AND t_hit_up_25_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit25_before_loss25,
+    CASE WHEN (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_15_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss15,
 
     in_core_monitoring,
     has_full_lookback,

@@ -6,6 +6,9 @@
 
 with source_data as (
     select * from {{ ref('birdeye_ohlcv') }}
+        where token_address not in (SELECT token_address FROM {{ ref('birdeye_ohlcv') }}
+        group by token_address
+            having abs(AVG(close) -1) <= 0.05)
 )
 
 select
