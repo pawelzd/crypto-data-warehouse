@@ -92,3 +92,13 @@ sources:
     tables:
       - name: public_historical_prices
         description: "Fact table of token prices with daily partitions, production."
+
+  - name: ema
+    description: "EMA database for technical indicator calculations."
+    database: crypto-trading-474111
+    schema: ema
+    tables:
+      - name: ema_14_50_labels
+        description: "Table containing EMA 14 and 50 crossover labels."
+      - name: ema_21_50_lables
+        description: "Table containing EMA 21 and 50 crossover labels."
