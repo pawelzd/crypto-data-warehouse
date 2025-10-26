@@ -1,11 +1,12 @@
 SELECT 
-token_address,
-market_cap_usd,
-fdv_usd,
+address AS token_address,
+market_cap AS market_cap_usd,
+fdv AS fdv_usd,
 total_supply,
 liquidity,
-circulating_supply
+circulating_supply,
+chain
 FROM
     {{ source('raw', 'raw_birdeye_market_data') }}
-WHERE market_cap_usd IS NOT NULL
-AND token_address IS NOT NULL
+WHERE market_cap IS NOT NULL
+AND address IS NOT NULL

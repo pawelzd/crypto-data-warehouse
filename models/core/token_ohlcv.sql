@@ -1,39 +1,42 @@
 {{ config(
-    schema='core',
-    materialized='table'
+  schema='core',
+  materialized='incremental',
+  incremental_strategy='merge',
+  unique_key=['token_address','price_timestamp','chain'],   
+  on_schema_change='sync_all_columns',
+  merge_update_columns=['close','high','open','low','volume','chain'] 
 ) }}
 
-
 with source_data as (
-    select * from {{ ref('birdeye_ohlcv') }}
-        where token_address not in (SELECT token_address FROM {{ ref('birdeye_ohlcv') }}
-        group by token_address
-            having abs(AVG(close) -1) <= 0.05)
-)
+  select *
+  from {{ ref('birdeye_ohlcv') }}
+  where token_address not in (
+    select token_address
+    from {{ ref('birdeye_ohlcv') }}
+    group by token_address
+    having abs(avg(close) - 1) <= 0.05
+  )
+),
 
-select
+incoming as (
+  select
     s.token_address,
     s.price_timestamp,
-    s.close, 
-    s.high, 
-    s.open, 
-    s.low, 
-    s.volume
-    
-from source_data as s
+    s.close,
+    s.high,
+    s.open,
+    s.low,
+    s.volume,
+    s.chain                               -- take chain from source
+  from source_data s
+)
 
+select i.*
+from incoming i
 {% if is_incremental() %}
-
-left join (
-    select
-        token_address,
-        max(price_timestamp) as max_timestamp
-    from {{ this }}
-    group by token_address
-) as dest
-on s.token_address = dest.token_address
-
-where dest.token_address is null
-   or s.price_timestamp > dest.max_timestamp
-
+left join {{ this }} t
+  on  t.token_address   = i.token_address
+  and t.price_timestamp = i.price_timestamp
+  and t.chain           = i.chain           -- include chain in the match
+where t.token_address is null               -- only rows not already present
 {% endif %}

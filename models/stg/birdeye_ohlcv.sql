@@ -5,6 +5,7 @@
 
 select
     item.address as token_address,
+    chain,
     timestamp_seconds(item.unixTime) as price_timestamp,
     safe_cast(item.c as numeric) as close,
     safe_cast(item.h as numeric) as high,
@@ -20,3 +21,4 @@ where
     safe_cast(item.c as numeric) is not null
     and item.address is not null 
     and item.unixTime is not null
+    and chain is not null

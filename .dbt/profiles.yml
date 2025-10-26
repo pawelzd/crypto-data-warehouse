@@ -18,3 +18,5 @@ dbt_bq_profile:
       timeout_seconds: 300
       location: europe-central2
       keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-2d5dd30897eb.json
+      compute_region: europe-central2       # pick a region inside the location (e.g. europe-west1 for EU, us-central1 for US)
+      gcs_bucket: token_trading

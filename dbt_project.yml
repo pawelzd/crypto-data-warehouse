@@ -43,6 +43,10 @@ models:
     ema:
       +materialized: table
       +schema: ema
+  
+    45m_ema_feat:
+      +materialized: table
+      +schema: 45m_ema_feat
 
     # staging:
     #   +materialized: view

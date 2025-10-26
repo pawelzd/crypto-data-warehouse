@@ -77,6 +77,8 @@ sources:
     tables:
       - name: token_metadata_jup_tmp
         description: "Token metadata from Jupiter API, temporary table."
+      - name: tmp_birdeye_static_data
+        description: "Temporary table for Birdeye static data with token_chain_id."
 
   - name: eval
     description: "Evaluation database for ml model testing and validation."
