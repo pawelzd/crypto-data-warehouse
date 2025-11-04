@@ -15,12 +15,12 @@ WITH base_sol AS (
     tp.price_timestamp,
     SAFE_CAST(tp.close  AS FLOAT64) AS price_usd,
     SAFE_CAST(tp.volume AS FLOAT64) AS volume,
-    (utb.totalSupply * tp.close)    AS mktcap
+    (utb.totalSupply * tp.close)    AS mktcap,
   FROM {{ ref('token_ohlcv_view') }} AS tp
   JOIN {{ source('core', 'token_metadata_jup_tmp') }} AS utb
     ON utb.id = tp.token_address
   WHERE tp.chain = 'sol'
-    AND (utb.totalSupply * tp.close) >= {{ mc_threshold }}
+    -- AND (utb.totalSupply * tp.close) >= {{ mc_threshold }}
 ),
 base_other AS (
   SELECT
@@ -30,7 +30,7 @@ base_other AS (
     tp.price_timestamp,
     SAFE_CAST(tp.close  AS FLOAT64) AS price_usd,
     SAFE_CAST(tp.volume AS FLOAT64) AS volume,
-    (utb.total_supply * tp.close)   AS mktcap
+    (utb.total_supply * tp.close)   AS mktcap,
   FROM {{ ref('token_ohlcv_view') }} AS tp
   JOIN {{ source('core', 'tmp_birdeye_static_data') }} AS utb
     ON utb.token_chain_id = tp.token_chain_id

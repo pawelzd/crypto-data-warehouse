@@ -3,18 +3,32 @@
 {% set mc_threshold = 1000000 %}
 {% set window_seconds = 172800 %} {# 2 days in seconds #}
 
+-- WITH base AS (
+--   SELECT
+--     tp.token_address,
+--     tp.price_timestamp,
+--     tp.price_usd,
+--     tp.volume,
+--     utb.mktcap AS mktcap
+--   FROM {{ ref('token_cv') }} AS tp
+--   INNER JOIN {{ ref('unique_token_mc') }} AS utb
+--     ON utb.token_address = tp.token_address
+--     AND utb.price_timestamp = tp.price_timestamp
+--   WHERE utb.max_mc > {{ mc_threshold }}
+
+-- ),
+
+
 WITH base AS (
   SELECT
     tp.token_address,
     tp.price_timestamp,
     tp.price_usd,
     tp.volume,
-    utb.mktcap AS mktcap
-  FROM {{ ref('token_cv') }} AS tp
-  INNER JOIN {{ ref('unique_token_mc') }} AS utb
-    ON utb.token_address = tp.token_address
-    AND utb.price_timestamp = tp.price_timestamp
-  WHERE utb.max_mc > {{ mc_threshold }}
+    tp.mktcap AS mktcap
+  FROM {{ ref('cv_filter_prep_72_view') }} AS tp
+  WHERE (tp.mktcap >= {{ mc_threshold }} AND  tp.chain = 'sol')
+     OR (tp.mktcap >= 45000000 AND  tp.chain <> 'sol')
 
 ),
 with_flags AS (

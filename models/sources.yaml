@@ -104,3 +104,12 @@ sources:
         description: "Table containing EMA 14 and 50 crossover labels."
       - name: ema_21_50_lables
         description: "Table containing EMA 21 and 50 crossover labels."
+  - name: 45m_ema_feat
+    description: "45-minute EMA feature database."
+    database: crypto-trading-474111
+    schema: 45m_ema_feat
+    tables:
+      - name: cv_ema21_ema50_calc
+        description: "Cross-validation table for EMA 21 and 50 calculations."
+      - name: cv_ema21_ema50_calc_new_method
+        description: "Cross-validation table for EMA 14 and 50 calculations."
