@@ -1,16 +1,28 @@
 
-
-WITH base AS (
+WITH prebase AS (
   SELECT address,
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
          price,
          volume
   FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
-  QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY address, TIMESTAMP_TRUNC(datetime, HOUR)
-            ORDER BY datetime DESC
-         ) = 1
-),
+  where address not in (
+    select address
+    from {{ source('streamed_datapublic', 'public_historical_prices') }}
+    group by address
+    having abs(avg(price) - 1) <= 0.05
+  )
+  or address in ('A1KLoBrKBde8Ty9qtNQUtq3C2ortoC3u7twggz7sEto6')
+), base AS (
+  SELECT address,
+         hour_ts,
+         price,
+         volume,
+         ROW_NUMBER() OVER (
+           PARTITION BY address, hour_ts
+           ORDER BY hour_ts DESC
+         ) AS rn
+  FROM prebase
+  ),
 bounds AS (
   SELECT address,
          MIN(hour_ts) AS start_ts,

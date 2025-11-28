@@ -48,6 +48,10 @@ models:
       +materialized: table
       +schema: 45m_ema_feat
 
+    strategies:
+      +materialized: table
+      +schema: strategies
+
     # staging:
     #   +materialized: view
     #   +schema: bronze
