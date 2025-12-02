@@ -95,6 +95,11 @@ sources:
       - name: public_historical_prices
         description: "Fact table of token prices with daily partitions, production."
 
+  - name: strategies  
+    description: "crypto trading strategies database."
+    database: crypto-trading-474111
+    schema: strategies
+
   - name: ema
     description: "EMA database for technical indicator calculations."
     database: crypto-trading-474111
