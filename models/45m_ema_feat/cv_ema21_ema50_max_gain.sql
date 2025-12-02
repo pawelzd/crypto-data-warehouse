@@ -1,4 +1,3 @@
--- Universe filter (adjust as you like)
 with eligible as (
   select *
   from {{ ref('cv_ema21_ema50_labels') }}
@@ -42,7 +41,7 @@ exits as (
    and ex.price_timestamp = ent.next_close_ts
 ),
 
--- Compute the maximum price reached between entry and the close
+-- Compute window stats between entry and close (max run-up, max drawdown, etc.)
 window_stats as (
   select
     ex.*,
@@ -54,6 +53,14 @@ window_stats as (
         and w.price_timestamp >= ex.price_timestamp
         and w.price_timestamp <= ex.next_close_ts
     ) as max_price_usd_in_window,
+    -- worst price in [entry_ts, next_close_ts] (for max drawdown)
+    (
+      select min(w.price_usd)
+      from eligible w
+      where w.token_chain_id = ex.token_chain_id
+        and w.price_timestamp >= ex.price_timestamp
+        and w.price_timestamp <= ex.next_close_ts
+    ) as min_price_usd_in_window,
     -- number of bars inside the trade
     (
       select count(*)
@@ -76,15 +83,19 @@ select
   next_close_ts            as close_ts,
   exit_price_usd,
   max_price_usd_in_window,
+  min_price_usd_in_window,
   bars_to_close,
 
   -- realized return if you must exit at the first subsequent label_close
-  safe_divide(exit_price_usd - price_usd, price_usd)                    as realized_return,
+  safe_divide(exit_price_usd - price_usd, price_usd)                          as realized_return,
 
   -- "maximal percentage gain" achievable before that close (peak in the window)
-  safe_divide(max_price_usd_in_window - price_usd, price_usd)           as max_runup,
+  safe_divide(max_price_usd_in_window - price_usd, price_usd)                 as max_runup,
 
   -- drawdown into the close (optional diagnostic)
-  safe_divide(exit_price_usd - max_price_usd_in_window, max_price_usd_in_window) as pullback_from_peak
+  safe_divide(exit_price_usd - max_price_usd_in_window, max_price_usd_in_window) as pullback_from_peak,
+
+  -- MAX DRAWDOWN: most adverse move from entry to the worst price in the window
+  safe_divide(min_price_usd_in_window - price_usd, price_usd)                 as max_drawdown
 from window_stats
 order by entry_ts

@@ -1,6 +1,7 @@
 -- dbt model (BigQuery)
 {{ config(materialized='table') }}
 
+
 {% set len21 = 21 %}
 {% set len50 = 50 %}
 
