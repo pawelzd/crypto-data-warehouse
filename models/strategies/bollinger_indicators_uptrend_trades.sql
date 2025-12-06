@@ -9,7 +9,7 @@
 ) }}
 
 WITH strategy AS (
-    SELECT * FROM {{ ref('bollinger_indicators') }}
+    SELECT * FROM {{ ref('bollinger_indicators_uptrend') }}
 ),
 
 entries AS (
@@ -22,7 +22,8 @@ entries AS (
     FROM
         strategy
     WHERE
-        signal_entry_optimized = TRUE
+        signal_entry_trend = TRUE
+        AND close > 0
 ),
 
 future_price_action AS (
@@ -36,10 +37,13 @@ future_price_action AS (
         s.close,
         s.high,
         s.low,
-        s.signal_exit_target, -- TRUE if Upper Band hit
+        s.sma_20,
         
-        -- METRIC: Return based on Close (Needed for your new logic)
-        ((s.close - e.entry_price) / e.entry_price) as close_return_pct
+        -- EXIT 1: Profit Target (SMA 20)
+        s.signal_target as hit_target,
+
+        -- EXIT 2: Hard Stop (-4% Tightened)
+        SAFE_DIVIDE((s.low - e.entry_price), e.entry_price) as low_return_pct
 
     FROM
         entries e
@@ -49,8 +53,8 @@ future_price_action AS (
         e.token_address = s.token_address 
         AND e.chain = s.chain
         AND s.price_timestamp > e.entry_ts
-        -- Optimization: Limit lookahead to 7 days
-        AND s.price_timestamp < TIMESTAMP_ADD(e.entry_ts, INTERVAL 7 DAY)
+        -- Max Hold 10 Days
+        AND s.price_timestamp < TIMESTAMP_ADD(e.entry_ts, INTERVAL 10 DAY)
 ),
 
 identified_exits AS (
@@ -61,21 +65,17 @@ identified_exits AS (
         entry_ts,
         entry_price,
         
-        -- We find the FIRST candle where either condition is met
         ARRAY_AGG(
-            STRUCT(price_timestamp, close) 
+            STRUCT(price_timestamp, close, sma_20, hit_target, low_return_pct) 
             ORDER BY price_timestamp ASC LIMIT 1
         )[OFFSET(0)] as first_event
         
     FROM
         future_price_action
     WHERE
-        -- Condition 1: Profit Target (Upper Band)
-        signal_exit_target = TRUE
+        hit_target = TRUE
         OR
-        -- Condition 2: Stop Loss based on CLOSE (New Logic)
-        -- We only exit if the candle CLOSES below -5%
-        close_return_pct <= -0.05
+        low_return_pct <= -0.04 -- Tightened Stop Logic
     GROUP BY
         1, 2, 3, 4, 5
 ),
@@ -88,8 +88,17 @@ final_trades AS (
         ex.entry_price as entry_price_usd,
         ex.first_event.price_timestamp as close_ts,
         
-        -- Logic Simplified: Since we trigger on Close, we exit at Close.
-        ex.first_event.close as exit_price_usd,
+        CASE 
+             WHEN ex.first_event.low_return_pct <= -0.04 THEN (ex.entry_price * 0.96)
+             WHEN ex.first_event.hit_target THEN ex.first_event.sma_20
+             ELSE ex.first_event.close
+        END as exit_price_usd,
+
+        CASE 
+            WHEN ex.first_event.low_return_pct <= -0.04 THEN 'HARD_STOP'
+            WHEN ex.first_event.hit_target THEN 'PROFIT_TARGET_SMA20'
+            ELSE 'TIME_EXIT'
+        END as exit_reason,
 
         TIMESTAMP_DIFF(ex.first_event.price_timestamp, ex.entry_ts, HOUR) as bars_to_close
     FROM
@@ -105,13 +114,8 @@ SELECT
     entry_price_usd,
     close_ts,
     exit_price_usd,
-    
-    -- Calculate Metrics
-    ((exit_price_usd - entry_price_usd) / entry_price_usd) as realized_return,
-    
-    -- We can still track Max Drawdown (Low) for analysis, even if it didn't trigger an exit
-    (SELECT MIN(low) FROM strategy s WHERE s.token_address = f.token_address AND s.price_timestamp BETWEEN f.entry_ts AND f.close_ts) as min_price_usd_in_window,
-    
+    exit_reason,
+    SAFE_DIVIDE((exit_price_usd - entry_price_usd), entry_price_usd) as realized_return,
     bars_to_close
 FROM
     final_trades f

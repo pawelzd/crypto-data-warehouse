@@ -51,6 +51,10 @@ models:
     strategies:
       +materialized: table
       +schema: strategies
+      
+    scam_detection:
+      +materialized: table
+      +schema: scam_detection 
 
     # staging:
     #   +materialized: view

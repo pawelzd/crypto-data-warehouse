@@ -144,6 +144,7 @@ per_series AS (
     COALESCE(MIN(IF(cumret_from_entry >= 2.00, h, NULL)), 200) AS t_hit_up_200,
     COALESCE(MIN(IF(cumret_from_entry >= 5.00, h, NULL)), 200) AS t_hit_up_500,
 
+    COALESCE(MIN(IF(cumret_from_entry <= -0.05, h, NULL)), 200) AS t_hit_dn_05,
     COALESCE(MIN(IF(cumret_from_entry <= -0.10, h, NULL)), 200) AS t_hit_dn_10,
     COALESCE(MIN(IF(cumret_from_entry <= -0.15, h, NULL)), 200) AS t_hit_dn_15,
     COALESCE(MIN(IF(cumret_from_entry <= -0.20, h, NULL)), 200) AS t_hit_dn_20,
@@ -217,7 +218,7 @@ SELECT
 
   -- kinetics (hours to thresholds)
   t_hit_up_10, t_hit_up_15, t_hit_up_20, t_hit_up_25, t_hit_up_30, t_hit_up_35, t_hit_up_40, t_hit_up_45, t_hit_up_50, t_hit_up_100, t_hit_up_200, t_hit_up_500,
-  t_hit_dn_10, t_hit_dn_15, t_hit_dn_20, t_hit_dn_25, t_hit_dn_30, t_hit_dn_35, t_hit_dn_40, t_hit_dn_45, t_hit_dn_50,
+  t_hit_dn_05, t_hit_dn_10, t_hit_dn_15, t_hit_dn_20, t_hit_dn_25, t_hit_dn_30, t_hit_dn_35, t_hit_dn_40, t_hit_dn_45, t_hit_dn_50,
 
   -- extremes
   COALESCE(max_gain_from_entry_3d, 0) AS max_gain_from_entry_3d,  -- EDIT (paranoia)

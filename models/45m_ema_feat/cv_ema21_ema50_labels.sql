@@ -9,6 +9,7 @@ WITH base AS (
         mktcap,
         ema_21,
         ema_50,
+        ema_200,
 
         -- previous hour EMA (shift(1) equivalent)
         LAG(ema_21) OVER (

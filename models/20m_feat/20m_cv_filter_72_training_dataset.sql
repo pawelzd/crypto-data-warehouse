@@ -44,7 +44,7 @@ future_min AS (
       monitoring_session_id,
       first_acquired_timestamp,
       has_full_3d,
-      t_hit_dn_25, t_hit_dn_20, t_hit_dn_15,
+      t_hit_dn_25, t_hit_dn_20, t_hit_dn_15, t_hit_dn_10, t_hit_dn_05,
       t_hit_up_35, t_hit_up_25, t_hit_up_20, t_hit_up_15, t_hit_up_10,
       ret_72h,
       ROW_NUMBER() OVER (
@@ -73,6 +73,8 @@ joined AS (
     LEAST(COALESCE(f.t_hit_dn_25, 75), 75) AS t_hit_dn_25_nn,
     LEAST(COALESCE(f.t_hit_dn_20, 75), 75) AS t_hit_dn_20_nn,
     LEAST(COALESCE(f.t_hit_dn_15, 75), 75) AS t_hit_dn_15_nn,
+    LEAST(COALESCE(f.t_hit_dn_10, 75), 75) AS t_hit_dn_10_nn,
+    LEAST(COALESCE(f.t_hit_dn_05, 75), 75) AS t_hit_dn_05_nn,
 
     -- bring the rest explicitly from past (no SELECT *)
     p.price, p.ret_1h, p.logret_1h,
@@ -114,6 +116,7 @@ final AS (
     monitoring_session_id,
     decision_ts,
 
+    CASE WHEN (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_05_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss05,
     CASE WHEN (t_hit_up_35_nn < 75 AND t_hit_up_35_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit35_before_loss25,
     CASE WHEN (t_hit_up_20_nn < 75 AND t_hit_up_20_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit20_before_loss25,
     CASE WHEN (t_hit_up_10_nn < 75 AND t_hit_up_10_nn < t_hit_dn_25_nn) THEN 1 ELSE 0 END AS label_profit10_before_loss25,
