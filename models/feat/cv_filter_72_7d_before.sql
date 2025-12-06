@@ -16,8 +16,7 @@ WITH base AS (
   FROM {{ ref('cv_filter_prep_72_ext_windows') }} c
   LEFT JOIN {{ source('core', 'token_metadata_jup_tmp') }} t
     ON c.token_address = t.id
-    AND t.organicScoreLabel <> 'low'
-  
+    -- AND t.organicScoreLabel <> 'low'
   GROUP BY
     c.token_address, c.monitoring_session_id, c.session_start, c.session_end,
     c.extended_start, c.extended_end, c.in_pre_extension, c.in_core_monitoring, c.in_post_extension,
@@ -140,6 +139,8 @@ roll AS (
     a_slow_pow,
     ret_1h_lag1,
 
+    -- ADDED: carry rn forward for regression x-axis
+    rn,  -- ADDED
 
     LEAST(GREATEST(SAFE_DIVIDE(volume - LAG(volume,1)  OVER (PARTITION BY token_address ORDER BY ts_hour),
                                NULLIF(LAG(volume,1) OVER (PARTITION BY token_address ORDER BY ts_hour),0)), -10), 10) AS volume_ret_1h,
@@ -164,9 +165,37 @@ roll AS (
     SAFE_DIVIDE(volume_sum_24h - volume_sum_168h, NULLIF(volume_sum_168h, 0)) AS volume_accel_24v168,
 
     -- expose EMAs with the exact names you want (keep them, you can comment in downstream)
-    
     SAFE_DIVIDE(SUM(volume * a_fast_pow) OVER w_unbounded, NULLIF(SUM(a_fast_pow) OVER w_unbounded, 0)) AS volume_ema_fast,
     SAFE_DIVIDE(SUM(volume * a_slow_pow) OVER w_unbounded, NULLIF(SUM(a_slow_pow) OVER w_unbounded, 0)) AS volume_ema_slow,
+
+    LOG(SAFE_CAST(price AS FLOAT64)) AS log_price,  -- ADDED
+    SAFE_DIVIDE(
+      COVAR_SAMP(LOG(SAFE_CAST(price AS FLOAT64)), CAST(rn AS FLOAT64)) OVER w24,
+      NULLIF(VAR_SAMP(CAST(rn AS FLOAT64)) OVER w24, 0)
+    ) AS trend_slope_24h,  -- ADDED
+
+    POW(
+      CORR(LOG(SAFE_CAST(price AS FLOAT64)), CAST(rn AS FLOAT64)) OVER w24,
+      2
+    ) AS trend_r2_24h,     -- ADDED
+
+    COUNTIF(price IS NOT NULL) OVER w24 AS n_24h,  -- ADDED
+
+    SAFE_DIVIDE(
+      COVAR_SAMP(LOG(SAFE_CAST(price AS FLOAT64)), CAST(rn AS FLOAT64)) OVER w168,
+      NULLIF(VAR_SAMP(CAST(rn AS FLOAT64)) OVER w168, 0)
+    ) AS trend_slope_7d,   -- ADDED
+
+    POW(
+      CORR(LOG(SAFE_CAST(price AS FLOAT64)), CAST(rn AS FLOAT64)) OVER w168,
+      2
+    ) AS trend_r2_7d,      -- ADDED
+
+    COUNTIF(price IS NOT NULL) OVER w168 AS n_7d,  -- ADDED
+
+    -- ADJUSTED: keep Bollinger-style bandwidths here
+    (2 * STDDEV_SAMP(price) OVER w24 )  / NULLIF(AVG(price) OVER w24 ,  0) AS bb_width_24h, -- ADDED
+    (2 * STDDEV_SAMP(price) OVER w168) / NULLIF(AVG(price) OVER w168, 0) AS bb_width_7d,
 
     -- ADDED: 12h stats for ret_over_rv_12h + general usefulness
     AVG(ret_1h) OVER w12  AS mean_ret_12h,
@@ -250,63 +279,109 @@ roll AS (
     w168 AS (PARTITION BY token_address ORDER BY ts_hour ROWS BETWEEN 167 PRECEDING AND CURRENT ROW)
 ),
 
+-- ADDED: compute t-stats using the regression outputs (needs prior aliases)
+trend AS (  -- ADDED
+  SELECT
+    r.*,
+    CASE
+      WHEN r.trend_r2_24h IS NULL OR r.trend_r2_24h >= 1 OR r.n_24h < 3 THEN NULL
+      ELSE SIGN(r.trend_slope_24h) * SQRT((r.n_24h - 2) * r.trend_r2_24h / NULLIF(1 - r.trend_r2_24h, 0))
+    END AS trend_tstat_24h,
+
+    CASE
+      WHEN r.trend_r2_7d IS NULL OR r.trend_r2_7d >= 1 OR r.n_7d < 3 THEN NULL
+      ELSE SIGN(r.trend_slope_7d) * SQRT((r.n_7d - 2) * r.trend_r2_7d / NULLIF(1 - r.trend_r2_7d, 0))
+    END AS trend_tstat_7d,
+
+    -- SAFE speeds (% over horizon) with clamped exponent to avoid overflow
+    CASE
+      WHEN r.trend_slope_24h IS NULL OR r.trend_r2_24h IS NULL OR r.n_24h < 3 OR r.trend_r2_24h < 1e-6
+        THEN NULL
+      ELSE EXP(LEAST(GREATEST(24 * r.trend_slope_24h, -20.0), 20.0)) - 1
+    END AS trend_speed_24h,
+
+    CASE
+      WHEN r.trend_slope_7d IS NULL OR r.trend_r2_7d IS NULL OR r.n_7d < 3 OR r.trend_r2_7d < 1e-6
+        THEN NULL
+      ELSE EXP(LEAST(GREATEST(168 * r.trend_slope_7d, -20.0), 20.0)) - 1
+    END AS trend_speed_7d
+  FROM roll r
+),  -- ADDED
+
 rsi AS (
   SELECT
-    token_address,
-    monitoring_session_id,
-    session_start,
-    session_end,
-    extended_start,
-    extended_end,
-    in_pre_extension,
-    in_core_monitoring,
-    in_post_extension,
-    ts_hour,
-    price,
-    ret_1h, logret_1h,
-    mean_ret_12h, std_ret_12h,
-    mean_ret_24h, std_ret_24h, mean_ret_72h, std_ret_72h, mean_ret_168h, std_ret_168h,
-    rv_4h, rv_12h, rv_24h, rv_7d,
-    sharpe_24h, sharpe_48h, sharpe_7d,
-    ret_z_24h, cumret_24h, cumret_7d,
-    sma_6h, sma_12h, sma_24h, sma_48h, sma_72h, sma_168h,
-    macd_sma_12_26h,
-    price_z_24h, pct_in_range_24h,
-    dist_to_high_4h, dist_to_low_4h,
-    dist_to_high_12h, dist_to_low_12h,
-    dist_to_high_24h, dist_to_low_24h,
-    breakout_high_24h, breakout_low_24h,
-    drawdown_7d, drawdown_24h, drawdown_48h,
-    acf1_72h,
-    has_24h, has_72h, has_168h,
-    volume_ret_1h,
-    volume_ret_24h,
-    log_volume,
-    log_volume_per_supply,
-    log_volume_mean_24h,
-    log_volume_mean_168h,
-    log_volume_mean_24h_per_supply,
-    log_volume_mean_168h_per_supply,
-    volume_cv_24h,
-    volume_cv_168h,
-    volume_spike_ratio_24h_excl,
-    volume_z_24h,
-    volume_accel_6v24,
-    volume_accel_24v168,
-    volume, total_supply,
-    volume_sum_6h, volume_sum_24h, volume_sum_168h,
-    volume_mean_24h, volume_mean_168h,
-    volume_std_24h, volume_std_168h,
-    volume_n_24h,
-    volume_ema_fast, volume_ema_slow,
-    rv_72h,
+    t.token_address,
+    t.monitoring_session_id,
+    t.session_start,
+    t.session_end,
+    t.extended_start,
+    t.extended_end,
+    t.in_pre_extension,
+    t.in_core_monitoring,
+    t.in_post_extension,
+    t.ts_hour,
+    t.price,
+    t.ret_1h, t.logret_1h,
+    t.mean_ret_12h, t.std_ret_12h,
+    t.mean_ret_24h, t.std_ret_24h, t.mean_ret_72h, t.std_ret_72h, t.mean_ret_168h, t.std_ret_168h,
+    t.rv_4h, t.rv_12h, t.rv_24h, t.rv_7d,
+    t.sharpe_24h, t.sharpe_48h, t.sharpe_7d,
+    t.ret_z_24h, t.cumret_24h, t.cumret_7d,
+    t.sma_6h, t.sma_12h, t.sma_24h, t.sma_48h, t.sma_72h, t.sma_168h,
+    t.macd_sma_12_26h,
+    t.price_z_24h, t.pct_in_range_24h,
+    t.dist_to_high_4h, t.dist_to_low_4h,
+    t.dist_to_high_12h, t.dist_to_low_12h,
+    t.dist_to_high_24h, t.dist_to_low_24h,
+    t.breakout_high_24h, t.breakout_low_24h,
+    t.drawdown_7d, t.drawdown_24h, t.drawdown_48h,
+    t.acf1_72h,
+    t.has_24h, t.has_72h, t.has_168h,
+    t.volume_ret_1h,
+    t.volume_ret_24h,
+    t.log_volume,
+    t.log_volume_per_supply,
+    t.log_volume_mean_24h,
+    t.log_volume_mean_168h,
+    t.log_volume_mean_24h_per_supply,
+    t.log_volume_mean_168h_per_supply,
+    t.volume_cv_24h,
+    t.volume_cv_168h,
+    t.volume_spike_ratio_24h_excl,
+    t.volume_z_24h,
+    t.volume_accel_6v24,
+    t.volume_accel_24v168,
+    t.volume, t.total_supply,
+    t.volume_sum_6h, t.volume_sum_24h, t.volume_sum_168h,
+    t.volume_mean_24h, t.volume_mean_168h,
+    t.volume_std_24h, t.volume_std_168h,
+    t.volume_n_24h,
+    t.volume_ema_fast, t.volume_ema_slow,
+    t.rv_72h,
 
-    GREATEST(ret_1h, 0)  AS gain,
-    GREATEST(-ret_1h, 0) AS loss,
+    -- RSI inputs
+    GREATEST(t.ret_1h, 0)  AS gain,
+    GREATEST(-t.ret_1h, 0) AS loss,
 
-    AVG(GREATEST(ret_1h, 0))  OVER (PARTITION BY token_address ORDER BY ts_hour ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_gain_14,
-    AVG(GREATEST(-ret_1h, 0)) OVER (PARTITION BY token_address ORDER BY ts_hour ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_loss_14
-  FROM roll
+    AVG(GREATEST(t.ret_1h, 0))  OVER (PARTITION BY t.token_address ORDER BY t.ts_hour ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_gain_14,
+    AVG(GREATEST(-t.ret_1h, 0)) OVER (PARTITION BY t.token_address ORDER BY t.ts_hour ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_loss_14,
+
+    -- ADDED: pass trend metrics through
+    t.rn,                       -- ADDED (optional)
+    t.log_price,                -- ADDED
+    t.trend_slope_24h,          -- ADDED
+    t.trend_r2_24h,             -- ADDED
+    t.n_24h,                    -- ADDED
+    t.trend_speed_24h,          -- ADDED
+    t.bb_width_24h,             -- ADDED
+    t.trend_slope_7d,           -- ADDED
+    t.trend_r2_7d,              -- ADDED
+    t.n_7d,                     -- ADDED
+    t.trend_speed_7d,           -- ADDED
+    t.bb_width_7d,              -- ADDED
+    t.trend_tstat_24h,          -- ADDED
+    t.trend_tstat_7d            -- ADDED
+  FROM trend t
 ),
 
 final AS (
@@ -337,7 +412,7 @@ final AS (
     COALESCE(r.rv_4h, 0)          AS rv_4h,
     COALESCE(r.rv_12h, 0)         AS rv_12h,
     COALESCE(r.rv_24h, 0)         AS rv_24h,
-    COALESCE(r.rv_72h, 0)         AS rv_72h,      -- <-- add this line
+    COALESCE(r.rv_72h, 0)         AS rv_72h,
     COALESCE(r.rv_7d, 0)          AS rv_7d,
     COALESCE(r.sharpe_24h, 0)     AS sharpe_24h,
     COALESCE(r.sharpe_7d, 0)      AS sharpe_7d,
@@ -368,6 +443,7 @@ final AS (
     COALESCE(r.volume_n_24h, 0) AS volume_n_24h,
     COALESCE(r.volume_ema_fast, 0) AS volume_ema_fast,
     COALESCE(r.volume_ema_slow, 0) AS volume_ema_slow,
+
     -- price MAs and distances
     COALESCE(r.sma_6h, 0)         AS sma_6h,
     COALESCE(r.sma_12h, 0)        AS sma_12h,
@@ -419,7 +495,22 @@ final AS (
     COALESCE(SAFE_DIVIDE(r.std_ret_72h, r.std_ret_168h), 0) AS vol_ratio_72_168,
     COALESCE(SAFE_DIVIDE(r.rv_4h,  NULLIF(r.rv_24h, 0)), 0) AS vol_ratio_4_24,
     COALESCE(SAFE_DIVIDE(r.rv_12h, NULLIF(r.rv_24h, 0)), 0) AS vol_ratio_12_24,
-    COALESCE(SAFE_DIVIDE(r.mean_ret_12h, NULLIF(r.rv_12h, 0)), 0) AS ret_over_rv_12h
+    COALESCE(SAFE_DIVIDE(r.mean_ret_12h, NULLIF(r.rv_12h, 0)), 0) AS ret_over_rv_12h,
+
+    -- ADDED: trend fields
+    COALESCE(r.trend_slope_24h, 0) AS trend_slope_24h,
+    COALESCE(r.trend_r2_24h,   0)  AS trend_r2_24h,
+    COALESCE(r.trend_tstat_24h,0)  AS trend_tstat_24h,
+    COALESCE(r.trend_speed_24h,0)  AS trend_speed_24h,
+    COALESCE(r.bb_width_24h,   0)  AS bb_width_24h,
+    COALESCE(r.n_24h,          0)  AS n_24h,
+
+    COALESCE(r.trend_slope_7d, 0)  AS trend_slope_7d,
+    COALESCE(r.trend_r2_7d,   0)   AS trend_r2_7d,
+    COALESCE(r.trend_tstat_7d,0)   AS trend_tstat_7d,
+    COALESCE(r.trend_speed_7d,0)   AS trend_speed_7d,
+    COALESCE(r.bb_width_7d,   0)   AS bb_width_7d,
+    COALESCE(r.n_7d,          0)   AS n_7d
   FROM rsi r
 ),
 
@@ -445,7 +536,27 @@ distances_and_slopes AS (
                - LAG(SAFE_DIVIDE(f.price, NULLIF(f.sma_48h,0)) - 1, 24) OVER w) / 24, 0) AS sma48h_slope_24h,
     (sharpe_24h - sharpe_7d) AS sharpe_delta,
     -- Interaction kept (relative by construction)
-    COALESCE(SAFE_DIVIDE(f.rsi_14 * f.vol_ratio_24_7d, 100), 0) AS rsi_vol_interaction
+    COALESCE(SAFE_DIVIDE(f.rsi_14 * f.vol_ratio_24_7d, 100), 0) AS rsi_vol_interaction,
+
+    -- ADDED: trend state labels (24h / 7d) and scores
+    CASE
+      WHEN f.trend_tstat_24h >= 2 AND f.price > f.sma_24h THEN 'UP'
+      WHEN f.trend_tstat_24h <= -2 AND f.price < f.sma_24h THEN 'DOWN'
+      WHEN f.bb_width_24h <= 0.05 AND ABS(f.trend_tstat_24h) < 1
+           AND f.breakout_high_24h = 0 AND f.breakout_low_24h = 0 THEN 'CONSOLIDATION'
+      ELSE 'CHOP'
+    END AS trend_state_24h,  -- ADDED
+
+    CASE
+      WHEN f.trend_tstat_7d >= 2 AND f.price > f.sma_168h THEN 'UP'
+      WHEN f.trend_tstat_7d <= -2 AND f.price < f.sma_168h THEN 'DOWN'
+      WHEN f.bb_width_7d <= 0.08 AND ABS(f.trend_tstat_7d) < 1
+           AND f.drawdown_7d > -0.03 THEN 'CONSOLIDATION'
+      ELSE 'CHOP'
+    END AS trend_state_7d,   -- ADDED
+
+    SIGN(f.trend_slope_24h) * ABS(f.trend_tstat_24h) * f.trend_r2_24h AS trend_score_24h, -- ADDED
+    SIGN(f.trend_slope_7d)  * ABS(f.trend_tstat_7d)  * f.trend_r2_7d  AS trend_score_7d   -- ADDED
 
   FROM final f
   WINDOW w AS (PARTITION BY f.token_address ORDER BY f.ts_hour)
@@ -453,4 +564,3 @@ distances_and_slopes AS (
 
 SELECT *
 FROM distances_and_slopes
-
