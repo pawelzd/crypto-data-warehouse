@@ -57,7 +57,29 @@ wicks AS (
   SELECT chain, token_address
   FROM {{ ref('scam_h_wicks') }}
   WHERE pattern_extreme_wick = 1
+),
+stable AS (
+  SELECT chain, token_address
+  FROM {{ ref('scam_h_stable') }}
+  WHERE pattern_stablecoin = 1
+),
+micro AS (
+  SELECT chain, token_address
+  FROM {{ ref('scam_h_micro') }}
+  WHERE pattern_microstructure_anomaly = 1
+),
+manual AS (
+  SELECT chain, token_address, notes as scam_pattern
+  FROM {{ ref('scam_manual') }}
 )
+
+SELECT
+  chain,
+  token_address,
+  'stablecoin' AS scam_pattern
+
+FROM stable
+UNION ALL
 
 SELECT
   chain,
@@ -120,3 +142,17 @@ SELECT
   token_address,
   'extreme_wicks' AS scam_pattern
 FROM wicks
+
+UNION ALL
+SELECT
+  chain,
+  token_address,
+  'extreme_micro' AS scam_pattern
+FROM micro
+
+Union ALL
+SELECT
+  chain,
+  token_address,
+  scam_pattern
+FROM manual
