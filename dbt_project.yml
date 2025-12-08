@@ -81,4 +81,7 @@ models:
     # gold:
     #   +materialized: view
     #   +schema: gold
-      
+seeds:
+  dbt_to_bq:
+    scam_manual:
+      +schema: scam_detection

@@ -1,5 +1,7 @@
 {{ config(materialized='table') }}
 
+-- Hourly OHLCV features per (chain, token_address)
+
 WITH base AS (
   SELECT
     s.chain,
@@ -12,7 +14,7 @@ WITH base AS (
     s.volume,
 
     -- Candle geometry
-    (s.high - s.low) AS rangee,
+    (s.high - s.low) AS rangea,
     ABS(s.close - s.open) AS body,
     SAFE_DIVIDE(
       s.high - GREATEST(s.open, s.close),
@@ -43,8 +45,30 @@ WITH base AS (
       )
     ) AS ret_from_prev
   FROM {{ ref('token_ohlcv') }} AS s
-  -- hourlies assumed; if you also have other intervals, filter here
+  -- assumes only hourly data, otherwise filter here:
+  -- WHERE s.interval = '1h'
   WHERE s.price_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+),
+
+base_with_alt AS (
+  SELECT
+    b.*,
+    LAG(b.is_green) OVER (
+      PARTITION BY b.chain, b.token_address
+      ORDER BY b.price_timestamp
+    ) AS prev_is_green,
+    CASE
+      WHEN LAG(b.is_green) OVER (
+             PARTITION BY b.chain, b.token_address
+             ORDER BY b.price_timestamp
+           ) IS NULL THEN NULL
+      WHEN b.is_green != LAG(b.is_green) OVER (
+             PARTITION BY b.chain, b.token_address
+             ORDER BY b.price_timestamp
+           ) THEN 1.0
+      ELSE 0.0
+    END AS alt_dir_flag
+  FROM base AS b
 ),
 
 agg AS (
@@ -73,15 +97,20 @@ agg AS (
     AVG(CASE WHEN volume IS NULL OR volume = 0 THEN 1.0 ELSE 0.0 END) AS zero_vol_share,
 
     -- Candle shape
-    AVG(rangee) AS avg_range,
+    AVG(rangea) AS avg_range,
     AVG(body)  AS avg_body,
     AVG(body_frac) AS avg_body_frac,
+    APPROX_QUANTILES(body_frac, 1001)[OFFSET(500)] AS median_body_frac,
     AVG(
       CASE
-        WHEN rangee > 0 AND body_frac <= 0.15 THEN 1.0
+        WHEN rangea > 0 AND body_frac <= 0.15 THEN 1.0
         ELSE 0.0
       END
     ) AS wickiness_share,
+
+    -- Range distribution for microstructure detection
+    APPROX_QUANTILES(rangea, 1001)[OFFSET(50)]  AS p05_range,
+    APPROX_QUANTILES(rangea, 1001)[OFFSET(950)] AS p95_range,
 
     -- Trend-ish features
     AVG(CASE WHEN is_green THEN 1.0 ELSE 0.0 END) AS green_share,
@@ -101,14 +130,17 @@ agg AS (
     ) AS big_move_share,
     MAX(ABS(ret_from_prev)) AS max_abs_ret,
 
+    -- Direction alternation share (microstructure)
+    AVG(alt_dir_flag) AS alt_dir_share,
+
     MAX(price_timestamp) AS last_ts
-  FROM base
+  FROM base_with_alt
   GROUP BY chain, token_address
 )
 
 SELECT
   *,
-  -- some normalized ratios to reuse downstream
+  -- normalized ratios to reuse downstream
   SAFE_DIVIDE(close_std, median_close) AS close_vol_ratio,
   SAFE_DIVIDE(avg_range, median_close) AS range_ratio,
   SAFE_DIVIDE(p01_low, median_close)   AS p01_low_ratio,
