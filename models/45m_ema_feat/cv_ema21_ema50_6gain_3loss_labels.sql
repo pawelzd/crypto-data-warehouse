@@ -1,7 +1,7 @@
 {{ config(materialized='table') }}
 
-{% set gain_thr = 0.05 %}   -- +5%
-{% set loss_thr = 0.05 %}   -- -5%
+{% set gain_thr = 0.06 %}   -- +5%
+{% set loss_thr = 0.03 %}   -- -5%
 {% set horizon_hours = 48 %} -- cap lookahead
 
 -- 1) Universe (same filter you use)
@@ -112,7 +112,7 @@ select
     when gain_hit_ts is not null
          and (loss_hit_ts is null or gain_hit_ts <= loss_hit_ts)
       then 1 else 0
-  end as label_gain5_before_loss5,
+  end as label_gain6_before_loss3,
 
   -- optional diagnostics
   case when gain_hit_ts is not null then timestamp_diff(gain_hit_ts, price_timestamp, minute) end as minutes_to_gain,
