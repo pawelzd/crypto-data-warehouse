@@ -1,3 +1,6 @@
+{{ config(
+    materialized = 'view'
+) }}
 WITH base AS (
   SELECT
     c.address AS token_address,

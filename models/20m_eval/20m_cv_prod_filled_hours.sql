@@ -1,4 +1,6 @@
-
+{{ config(
+    materialized = 'view'
+) }}
 WITH prebase AS (
   SELECT address,
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
@@ -60,5 +62,7 @@ filled AS (
   FROM joined
 )
 SELECT address, hour_ts AS datetime, price, volume
-FROM filled
-ORDER BY address, datetime
+FROM filled b
+where not exists (select 1 from {{ref('token_missing_data_h')}} tmd where b.address = tmd.token_address and tmd.chain='sol')
+    and not exists (select 1 from {{ref('scam_h_union')}} su where su.chain='sol' and b.address = su.token_address)
+ORDER BY address, datetime

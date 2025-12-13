@@ -1,3 +1,7 @@
+{{ config(
+    materialized = 'view'
+) }}
+
 WITH past AS (
   SELECT
     token_address,
@@ -31,6 +35,7 @@ WITH past AS (
     volume_ema_fast, volume_ema_slow,
     sharpe_delta
   FROM {{ ref('20m_cv_prod_72_7d_before') }}
+  
 ),
 
 final AS (
