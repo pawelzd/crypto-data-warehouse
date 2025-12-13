@@ -2,7 +2,7 @@
     materialized = 'view'
 ) }}
 WITH prebase AS (
-  SELECT address,
+  SELECT distinct address,
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
          price,
          volume
