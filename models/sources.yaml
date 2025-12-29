@@ -70,6 +70,15 @@ sources:
         description: "Raw snapshot of wallet asset holdings."
       - name: raw_birdeye_market_data
         description: "Raw Birdeye market data."
+  - name: raw_prices
+    description: "Source for raw Birdeye OHLCV price data."
+    database: crypto-trading-474111
+    schema: raw_prices
+    tables:
+      - name: raw_birdeye_ohlcv_15m
+        description: "Raw Birdeye OHLCV 15-minute data."
+      - name: raw_birdeye_ohlcv_1h
+        description: "Raw Birdeye OHLCV 1-hour data."
   - name: core
     description: "Source for core data."
     database: crypto-trading-474111
