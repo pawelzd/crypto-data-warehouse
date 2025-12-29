@@ -33,6 +33,8 @@ WITH past AS (
     volume_ema_fast, volume_ema_slow,
     sharpe_delta
   FROM {{ ref('20m_cv_filter_72_7d_before') }}
+  where chain = 'sol'
+  AND 
 ),
 
 -- Deduplicate the future table on the join keys

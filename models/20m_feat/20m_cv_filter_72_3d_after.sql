@@ -1,5 +1,4 @@
 
-
 -- 1) Hourly prices from the extended windows (keep session metadata & flags)
 WITH hourly AS (
   SELECT
