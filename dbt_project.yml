@@ -28,9 +28,15 @@ models:
     stg:
       +materialized: view
       +schema: stg
+    stg_prices:
+      +materialized: view
+      +schema: stg_prices
     core:
       +materialized: table
       +schema: core
+    core_prices:
+      +materialized: table
+      +schema: core_prices
     eval:
       +materialized: view
       +schema: eval

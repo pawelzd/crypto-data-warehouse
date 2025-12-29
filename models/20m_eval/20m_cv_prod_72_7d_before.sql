@@ -1,7 +1,15 @@
 {{ config(
     materialized = 'view'
 ) }}
-WITH base AS (
+
+WITH meta as (
+  select distinct id, circSupply, audit_topHoldersPercentage
+  from {{ source('core', 'token_metadata_jup_tmp') }}
+  UNION DISTINCT
+  select distinct id, circSupply, audit_topHoldersPercentage
+  from {{ source('core', 'jup_tmp_v2') }}
+),
+base AS (
   SELECT
     c.address AS token_address,
     SAFE_CAST(c.volume AS FLOAT64) AS volume,
@@ -9,9 +17,10 @@ WITH base AS (
     AVG(SAFE_CAST(c.price AS FLOAT64)) AS price,
     SAFE_CAST(t.circSupply AS FLOAT64) AS total_supply
   FROM {{ ref('20m_cv_prod_filled_hours') }} c
-  LEFT JOIN {{ source('core', 'token_metadata_jup_tmp') }} t
+  LEFT JOIN meta t
     ON c.address = t.id
-  where t.mcap >= 20000000
+  where (t.circSupply * c.price) >= 20000000
+    AND t.audit_topHoldersPercentage < 60
   GROUP BY
     c.address, 
     ts_hour, t.circSupply, c.volume

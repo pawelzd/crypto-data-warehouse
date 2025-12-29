@@ -70,6 +70,15 @@ sources:
         description: "Raw snapshot of wallet asset holdings."
       - name: raw_birdeye_market_data
         description: "Raw Birdeye market data."
+  - name: raw_prices
+    description: "Source for raw Birdeye OHLCV price data."
+    database: crypto-trading-474111
+    schema: raw_prices
+    tables:
+      - name: raw_birdeye_ohlcv_15m
+        description: "Raw Birdeye OHLCV 15-minute data."
+      - name: raw_birdeye_ohlcv_1h
+        description: "Raw Birdeye OHLCV 1-hour data."
   - name: core
     description: "Source for core data."
     database: crypto-trading-474111
@@ -79,6 +88,8 @@ sources:
         description: "Token metadata from Jupiter API, temporary table."
       - name: tmp_birdeye_static_data
         description: "Temporary table for Birdeye static data with token_chain_id."
+      - name: jup_tmp_v2
+        description: "Token metadata from Jupiter API, version 2."
 
   - name: eval
     description: "Evaluation database for ml model testing and validation."
