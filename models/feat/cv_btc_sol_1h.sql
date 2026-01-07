@@ -1,9 +1,13 @@
+{{ config(
+    schema='feat',
+    materialized='view'
+) }}
 WITH base AS (
   SELECT
     token_address,
     TIMESTAMP_TRUNC(price_timestamp, HOUR) AS ts_hour,
     AVG(CAST(price_usd AS FLOAT64)) AS price
-  FROM {{ ref('token_cv') }}
+  FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
   WHERE price_usd IS NOT NULL
   AND token_address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
   GROUP BY token_address, ts_hour
