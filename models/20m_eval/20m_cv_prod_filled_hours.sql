@@ -1,19 +1,26 @@
 {{ config(
     materialized = 'view'
 ) }}
-WITH prebase AS (
-  SELECT distinct address,
+with preprebase AS (
+
+    SELECT distinct address,
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
          price,
          volume
   FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
+  UNION ALL
+  select * from `20m_eval.tmp_test_toprod_data`
+
+),
+prebase AS (
+  SELECT *
+  FROM preprebase
   where address not in (
     select address
     from {{ source('streamed_datapublic', 'public_historical_prices') }}
     group by address
     having abs(avg(price) - 1) <= 0.05
   )
-  or address in ('A1KLoBrKBde8Ty9qtNQUtq3C2ortoC3u7twggz7sEto6')
 ), base AS (
   SELECT address,
          hour_ts,

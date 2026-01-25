@@ -4,13 +4,14 @@
 ) }}
 WITH base AS (
   SELECT
-    token_address,
-    TIMESTAMP_TRUNC(price_timestamp, HOUR) AS ts_hour,
-    AVG(CAST(price_usd AS FLOAT64)) AS price
+    address AS token_address,
+    TIMESTAMP_TRUNC(datetime, HOUR) AS ts_hour,
+    AVG(CAST(price AS FLOAT64)) AS price
   FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
-  WHERE price_usd IS NOT NULL
-  AND token_address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
-  GROUP BY token_address, ts_hour
+  WHERE price IS NOT NULL
+  AND address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
+  and datetime < '2025-05-01'
+  GROUP BY address, datetime
 ),
 lags AS (
   SELECT
