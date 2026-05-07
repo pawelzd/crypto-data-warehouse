@@ -206,4 +206,3 @@ final_with_sol AS (
 
 SELECT *
 FROM final_with_sol
-ORDER BY token_address, decision_ts

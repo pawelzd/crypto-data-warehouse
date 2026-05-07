@@ -105,6 +105,8 @@ sources:
     tables:
       - name: public_historical_prices
         description: "Fact table of token prices with daily partitions, production."
+      - name: public_tokens_to_monitor
+        description: "Table of tokens to monitor with market cap and audit data." 
 
   - name: strategies  
     description: "crypto trading strategies database."

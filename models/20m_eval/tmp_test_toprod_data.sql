@@ -27,7 +27,7 @@ anchors AS (
   JOIN mcap_dedup md
     ON t.token_address = md.token_address
   WHERE t.chain = 'sol'
-    AND t.price_timestamp >= TIMESTAMP('2025-04-24')
+    --AND t.price_timestamp >= TIMESTAMP('2025-04-24')
     -- anchor must be exactly 05:00:00
     AND EXTRACT(HOUR   FROM t.price_timestamp) = 5
     AND EXTRACT(MINUTE FROM t.price_timestamp) = 0
@@ -46,7 +46,7 @@ FROM `crypto-trading-474111.core.token_ohlcv` t
 JOIN anchors a
   ON t.token_address = a.token_address
  AND t.price_timestamp >= a.anchor_ts
- AND t.price_timestamp <  TIMESTAMP_ADD(a.anchor_ts, INTERVAL 24 HOUR)
+ AND t.price_timestamp <  TIMESTAMP_ADD(a.anchor_ts, INTERVAL 1680 HOUR)
 WHERE t.chain = 'sol'
-  AND t.price_timestamp >= TIMESTAMP('2025-05-01') and t.price_timestamp < TIMESTAMP('2025-08-26 15:00:00 UTC')
+  --AND t.price_timestamp >= TIMESTAMP('2025-05-01') and t.price_timestamp < TIMESTAMP('2025-08-26 15:00:00 UTC')
 ORDER BY t.token_address, t.price_timestamp

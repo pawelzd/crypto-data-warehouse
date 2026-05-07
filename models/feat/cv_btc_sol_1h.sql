@@ -7,10 +7,10 @@ WITH base AS (
     address AS token_address,
     TIMESTAMP_TRUNC(datetime, HOUR) AS ts_hour,
     AVG(CAST(price AS FLOAT64)) AS price
-  FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
+  FROM {{ ref('20m_cv_prod_filled_hours') }}
   WHERE price IS NOT NULL
   AND address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
-  and datetime < '2025-05-01'
+  --and datetime < '2025-05-01'
   GROUP BY address, datetime
 ),
 lags AS (

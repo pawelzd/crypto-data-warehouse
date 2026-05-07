@@ -2,23 +2,10 @@
     materialized = 'view'
 ) }}
 
-WITH meta_pre as (
-  select distinct id, circSupply, audit_topHoldersPercentage
-  from {{ source('core', 'token_metadata_jup_tmp') }}
-  UNION DISTINCT
-  select distinct id, circSupply, audit_topHoldersPercentage
-  from {{ source('core', 'jup_tmp_v2') }}
-),
-meta AS (
-  SELECT
-    id,
-    circSupply,
-    audit_topHoldersPercentage
-  FROM meta_pre
-  UNION DISTINCT 
-  select distinct token_address as id, circulating_supply, 70
-    from {{ ref('birdeye_market_data') }}
-    WHERE token_address not in (select distinct id from meta_pre)
+with meta AS (
+  select address, max(circulating_supply) as circulating_supply, max(market_cap) as market_cap--, audit_topHoldersPercentage
+  from {{ source('streamed_datapublic', 'public_tokens_to_monitor') }}
+  group by address
 ),
 base AS (
   SELECT
@@ -26,15 +13,16 @@ base AS (
     SAFE_CAST(c.volume AS FLOAT64) AS volume,
     c.datetime AS ts_hour,
     AVG(SAFE_CAST(c.price AS FLOAT64)) AS price,
-    SAFE_CAST(t.circSupply AS FLOAT64) AS total_supply
+    SAFE_CAST(t.circulating_supply AS FLOAT64) AS total_supply
   FROM {{ ref('20m_cv_prod_filled_hours') }} c
   LEFT JOIN meta t
-    ON c.address = t.id
-  where --(t.circSupply * c.price) >= 20000000 AND
-     t.audit_topHoldersPercentage < 60
+    ON c.address = t.address
+    AND DATE(c.datetime) = DATE(t.datetime)
+  where t.market_cap >= 20000000 
+  --AND t.audit_topHoldersPercentage < 60
   GROUP BY
     c.address, 
-    ts_hour, t.circSupply, c.volume
+    ts_hour, t.circulating_supply, c.volume
 ),
 
 lags AS (
