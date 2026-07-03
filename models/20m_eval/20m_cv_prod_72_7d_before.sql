@@ -3,9 +3,25 @@
 ) }}
 
 with meta AS (
-  select address, max(circulating_supply) as circulating_supply, max(market_cap) as market_cap--, audit_topHoldersPercentage
+  select
+    address,
+    max(SAFE_CAST(circulating_supply AS FLOAT64)) as circulating_supply
+    --, audit_topHoldersPercentage
   from {{ source('streamed_datapublic', 'public_tokens_to_monitor') }}
   group by address
+),
+eligible_tokens AS (
+  SELECT
+    c.address
+  FROM {{ ref('20m_cv_prod_filled_hours') }} c
+  JOIN meta t
+    ON c.address = t.address
+  GROUP BY c.address
+  HAVING COUNT(DISTINCT IF(
+    SAFE_CAST(c.price AS FLOAT64) * SAFE_CAST(t.circulating_supply AS FLOAT64) >= 20000000,
+    c.datetime,
+    NULL
+  )) >= 480
 ),
 base AS (
   SELECT
@@ -17,8 +33,8 @@ base AS (
   FROM {{ ref('20m_cv_prod_filled_hours') }} c
   LEFT JOIN meta t
     ON c.address = t.address
-    AND DATE(c.datetime) = DATE(t.datetime)
-  where t.market_cap >= 20000000 
+  JOIN eligible_tokens e
+    ON c.address = e.address
   --AND t.audit_topHoldersPercentage < 60
   GROUP BY
     c.address, 

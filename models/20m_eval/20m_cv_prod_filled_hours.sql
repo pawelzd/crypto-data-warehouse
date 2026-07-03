@@ -1,15 +1,36 @@
 {{ config(
     materialized = 'view'
 ) }}
-with preprebase AS (
+with raw_prices AS (
 
-    SELECT distinct address,
+  SELECT
+         address,
          TIMESTAMP_TRUNC(datetime, HOUR) AS hour_ts,
-         price,
-         volume
+         SAFE_CAST(price AS FLOAT64) AS price,
+         SAFE_CAST(volume AS FLOAT64) AS volume,
+         1 AS source_priority
   FROM {{ source('streamed_datapublic', 'public_historical_prices') }}
+
   UNION ALL
-  select * from `20m_eval.tmp_test_toprod_data`
+
+  SELECT
+         address,
+         hour_ts,
+         SAFE_CAST(price AS FLOAT64) AS price,
+         SAFE_CAST(volume AS FLOAT64) AS volume,
+         2 AS source_priority
+  FROM {{ ref('tmp_test_toprod_data') }}
+
+),
+preprebase AS (
+  SELECT
+    address,
+    hour_ts,
+    AVG(price) AS price,
+    MAX(volume) AS volume,
+    source_priority
+  FROM raw_prices
+  GROUP BY address, hour_ts, source_priority
 
 ),
 prebase AS (
@@ -22,15 +43,12 @@ prebase AS (
     having abs(avg(price) - 1) <= 0.05
   )
 ), base AS (
-  SELECT address,
-         hour_ts,
-         price,
-         volume,
-         ROW_NUMBER() OVER (
-           PARTITION BY address, hour_ts
-           ORDER BY hour_ts DESC
-         ) AS rn
+  SELECT address, hour_ts, price, volume
   FROM prebase
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY address, hour_ts
+    ORDER BY source_priority
+  ) = 1
   ),
 bounds AS (
   SELECT address,
