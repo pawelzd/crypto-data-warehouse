@@ -4,6 +4,14 @@ New columns appended to `rl_inference_features_next_open_v`, keyed by
 `(token_address, price_timestamp)`. All rolling features are causal
 (`ROWS ... PRECEDING AND CURRENT ROW`) and NULL until the window is full.
 
+**Model layout.** The per-token OHLC feature derivation (§4 + §7) lives in a
+separate materialized table, `rl_ohlc_candle_features`, because inlining its
+~10 stacked window passes into the view exceeds BigQuery's query-planning
+complexity limit. The view joins that table and computes the cross-sectional
+(§5A/§5B) and market-reference (§5C) columns on top. Build order:
+`dbt run -s rl_ohlc_candle_features` (or `dbt run -s +rl_inference_features_next_open_v`)
+before querying the view.
+
 ## Source & conventions (§1 verification)
 
 - **OHLC source:** `token_ohlcv` (Birdeye candles), deduped to one row per
