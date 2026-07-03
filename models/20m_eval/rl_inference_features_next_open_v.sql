@@ -622,9 +622,12 @@ ohlc_win2 AS (
     IF(w.row_idx >= 168, SAFE_DIVIDE(
         COVAR_POP(w._logclose_rel, CAST(w.row_idx AS FLOAT64)) OVER w168,
         NULLIF(VAR_POP(CAST(w.row_idx AS FLOAT64)) OVER w168, 0.0)), NULL) AS _trend_slope_7d_ohlc,
-    ARRAY_AGG(w.atr_24h IGNORE NULLS) OVER w720                 AS _arr_atr_720,
-    ARRAY_AGG(w.range_1h IGNORE NULLS) OVER w24                 AS _arr_range_24,
-    ARRAY_AGG(w.high IGNORE NULLS) OVER w168                    AS _arr_high_168,
+    -- analytic ARRAY_AGG cannot use IGNORE NULLS in BigQuery; COALESCE warmup
+    -- NULLs to a -1.0 sentinel (atr/range/high are all >= 0) and filter it out
+    -- in the consuming subqueries below.
+    ARRAY_AGG(COALESCE(w.atr_24h, -1.0)) OVER w720             AS _arr_atr_720,
+    ARRAY_AGG(COALESCE(w.range_1h, -1.0)) OVER w24             AS _arr_range_24,
+    ARRAY_AGG(COALESCE(w.high, -1.0)) OVER w168                AS _arr_high_168,
     MAX(IF(w.inside_1h = 0, w.row_idx, NULL)) OVER wcum         AS _last_non_inside
   FROM ohlc_win1 w
   WINDOW
@@ -642,16 +645,16 @@ ohlc_win3 AS (
     IF(w.row_idx >= 48,  AVG(w.dx_24h)  OVER w24,  NULL)       AS adx_24h,
     IF(w.row_idx >= 336, AVG(w.dx_168h) OVER w168, NULL)       AS adx_168h,
     CAST(LEAST(w.row_idx - COALESCE(w._last_non_inside, 0), 6) AS FLOAT64) AS consec_inside_6h,
-    CASE WHEN ARRAY_LENGTH(w._arr_atr_720) >= 720 THEN
-      (SELECT SAFE_DIVIDE(COUNTIF(v <= w.atr_24h), COUNT(v)) FROM UNNEST(w._arr_atr_720) AS v)
+    CASE WHEN (SELECT COUNT(1) FROM UNNEST(w._arr_atr_720) AS v WHERE v >= 0) >= 720 THEN
+      (SELECT SAFE_DIVIDE(COUNTIF(v <= w.atr_24h), COUNT(1)) FROM UNNEST(w._arr_atr_720) AS v WHERE v >= 0)
     END                                                        AS squeeze_pctile_720h,
-    CASE WHEN ARRAY_LENGTH(w._arr_range_24) >= 24 THEN
-      (SELECT SAFE_DIVIDE(COUNTIF(v <= w.range_1h), COUNT(v)) FROM UNNEST(w._arr_range_24) AS v)
+    CASE WHEN (SELECT COUNT(1) FROM UNNEST(w._arr_range_24) AS v WHERE v >= 0) >= 24 THEN
+      (SELECT SAFE_DIVIDE(COUNTIF(v <= w.range_1h), COUNT(1)) FROM UNNEST(w._arr_range_24) AS v WHERE v >= 0)
     END                                                        AS nr_pctrank_24h,
     CASE WHEN ARRAY_LENGTH(w._arr_high_168) >= 168 THEN
       (ARRAY_LENGTH(w._arr_high_168) - 1
         - (SELECT MAX(off) FROM UNNEST(w._arr_high_168) AS v WITH OFFSET off
-             WHERE v = (SELECT MAX(v2) FROM UNNEST(w._arr_high_168) AS v2))
+             WHERE v = (SELECT MAX(v2) FROM UNNEST(w._arr_high_168) AS v2 WHERE v2 >= 0))
       ) / 168.0
     END                                                        AS bars_since_true_high_168h
   FROM ohlc_win2 w
