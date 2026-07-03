@@ -171,7 +171,7 @@ btc_mt AS (
     SELECT m.*,
            ROW_NUMBER() OVER (PARTITION BY ts_hour ORDER BY ts_hour) AS rn
     FROM {{ ref('cv_btc_sol_1h') }} m
-    WHERE m.token_address = '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh'
+    WHERE m.token_address = 'btcusdt'
   )
   WHERE rn = 1
 ),

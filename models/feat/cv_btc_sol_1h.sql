@@ -9,9 +9,20 @@ WITH base AS (
     AVG(CAST(price AS FLOAT64)) AS price
   FROM {{ ref('20m_cv_prod_filled_hours') }}
   WHERE price IS NOT NULL
-  AND address IN ('So11111111111111111111111111111111111111112', '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh')
+    AND address = 'So11111111111111111111111111111111111111112'
   --and datetime < '2025-05-01'
-  GROUP BY address, datetime
+  GROUP BY address, ts_hour
+
+  UNION ALL
+
+  SELECT
+    token_address,
+    TIMESTAMP_TRUNC(price_timestamp, HOUR) AS ts_hour,
+    AVG(CAST(close AS FLOAT64)) AS price
+  FROM {{ ref('token_ohlcv') }}
+  WHERE close IS NOT NULL
+    AND token_address = 'btcusdt'
+  GROUP BY token_address, ts_hour
 ),
 lags AS (
   SELECT
