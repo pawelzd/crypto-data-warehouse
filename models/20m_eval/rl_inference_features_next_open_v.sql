@@ -470,24 +470,101 @@ ohlc_rel AS (
   FROM ohlc_active
 ),
 
--- §5C BTC / SOL market-reference series (same features, single series each).
+-- §5C / BTC-OHLCV spec (2026-07-05): BTC and SOL market-regime features, one
+-- row per price_timestamp, broadcast to every altcoin row by the join below.
+-- These are the single-series OHLCV features from rl_ohlc_candle_features
+-- (a single-token PARTITION BY token_address window IS the single series).
+-- Degenerate-for-a-liquid-series columns are intentionally not surfaced:
+-- zero_range_frac_24h (always 0), range_impact_24h (no liquidity signal on a
+-- reference series), and the noisy per-bar clv_1h (ship smoothed clv_mean_*).
 ohlc_btc_ref AS (
   SELECT
     price_timestamp,
-    atr_ratio_24_168     AS btc_atr_ratio_24_168,
-    parkinson_rv_24h     AS btc_parkinson_rv_24h,
-    clv_mean_24h         AS btc_clv_mean_24h,
-    squeeze_pctile_720h  AS btc_squeeze_pctile_720h
+    -- already shipped (do not rebuild)
+    atr_ratio_24_168           AS btc_atr_ratio_24_168,
+    parkinson_rv_24h           AS btc_parkinson_rv_24h,
+    clv_mean_24h               AS btc_clv_mean_24h,
+    squeeze_pctile_720h        AS btc_squeeze_pctile_720h,
+    -- flow / accumulation
+    flow_imbalance_24h         AS btc_flow_imbalance_24h,
+    flow_imbalance_168h        AS btc_flow_imbalance_168h,
+    ad_slope_168h              AS btc_ad_slope_168h,
+    ad_price_diverge_168h      AS btc_ad_price_diverge_168h,
+    mfi_24h                    AS btc_mfi_24h,
+    vwap_dist_24h              AS btc_vwap_dist_24h,
+    vwap_dist_168h             AS btc_vwap_dist_168h,
+    wick_asym_24h              AS btc_wick_asym_24h,
+    -- volatility / compression regime
+    atr_24h                    AS btc_atr_24h,
+    atr_168h                   AS btc_atr_168h,
+    range_z_24h                AS btc_range_z_24h,
+    nr_pctrank_24h             AS btc_nr_pctrank_24h,
+    -- spread / stress regime
+    cs_spread_24h_bps          AS btc_cs_spread_24h_bps,
+    cs_spread_z_168h           AS btc_cs_spread_z_168h,
+    -- trend quality
+    adx_24h                    AS btc_adx_24h,
+    adx_168h                   AS btc_adx_168h,
+    di_diff_24h                AS btc_di_diff_24h,
+    choppiness_168h            AS btc_choppiness_168h,
+    vortex_24h                 AS btc_vortex_24h,
+    er_24h                     AS btc_er_24h,
+    er_168h                    AS btc_er_168h,
+    -- true extremes / path
+    dist_to_true_high_24h      AS btc_dist_to_true_high_24h,
+    dist_to_true_high_168h     AS btc_dist_to_true_high_168h,
+    dist_to_true_high_720h     AS btc_dist_to_true_high_720h,
+    dist_to_true_low_24h       AS btc_dist_to_true_low_24h,
+    dist_to_true_low_168h      AS btc_dist_to_true_low_168h,
+    true_breakout_high_24h     AS btc_true_breakout_high_24h,
+    true_breakout_low_24h      AS btc_true_breakout_low_24h,
+    true_range_pos_168h        AS btc_true_range_pos_168h,
+    bars_since_true_high_168h  AS btc_bars_since_true_high_168h,
+    -- extra drift-robust vol estimators
+    gk_rv_24h                  AS btc_gk_rv_24h,
+    rs_rv_24h                  AS btc_rs_rv_24h
   FROM ohlc_token_features
   WHERE token_address = 'btcusdt'
 ),
 ohlc_sol_ref AS (
   SELECT
     price_timestamp,
-    atr_ratio_24_168     AS sol_atr_ratio_24_168,
-    parkinson_rv_24h     AS sol_parkinson_rv_24h,
-    clv_mean_24h         AS sol_clv_mean_24h,
-    squeeze_pctile_720h  AS sol_squeeze_pctile_720h
+    atr_ratio_24_168           AS sol_atr_ratio_24_168,
+    parkinson_rv_24h           AS sol_parkinson_rv_24h,
+    clv_mean_24h               AS sol_clv_mean_24h,
+    squeeze_pctile_720h        AS sol_squeeze_pctile_720h,
+    flow_imbalance_24h         AS sol_flow_imbalance_24h,
+    flow_imbalance_168h        AS sol_flow_imbalance_168h,
+    ad_slope_168h              AS sol_ad_slope_168h,
+    ad_price_diverge_168h      AS sol_ad_price_diverge_168h,
+    mfi_24h                    AS sol_mfi_24h,
+    vwap_dist_24h              AS sol_vwap_dist_24h,
+    vwap_dist_168h             AS sol_vwap_dist_168h,
+    wick_asym_24h              AS sol_wick_asym_24h,
+    atr_24h                    AS sol_atr_24h,
+    atr_168h                   AS sol_atr_168h,
+    range_z_24h                AS sol_range_z_24h,
+    nr_pctrank_24h             AS sol_nr_pctrank_24h,
+    cs_spread_24h_bps          AS sol_cs_spread_24h_bps,
+    cs_spread_z_168h           AS sol_cs_spread_z_168h,
+    adx_24h                    AS sol_adx_24h,
+    adx_168h                   AS sol_adx_168h,
+    di_diff_24h                AS sol_di_diff_24h,
+    choppiness_168h            AS sol_choppiness_168h,
+    vortex_24h                 AS sol_vortex_24h,
+    er_24h                     AS sol_er_24h,
+    er_168h                    AS sol_er_168h,
+    dist_to_true_high_24h      AS sol_dist_to_true_high_24h,
+    dist_to_true_high_168h     AS sol_dist_to_true_high_168h,
+    dist_to_true_high_720h     AS sol_dist_to_true_high_720h,
+    dist_to_true_low_24h       AS sol_dist_to_true_low_24h,
+    dist_to_true_low_168h      AS sol_dist_to_true_low_168h,
+    true_breakout_high_24h     AS sol_true_breakout_high_24h,
+    true_breakout_low_24h      AS sol_true_breakout_low_24h,
+    true_range_pos_168h        AS sol_true_range_pos_168h,
+    bars_since_true_high_168h  AS sol_bars_since_true_high_168h,
+    gk_rv_24h                  AS sol_gk_rv_24h,
+    rs_rv_24h                  AS sol_rs_rv_24h
   FROM ohlc_token_features
   WHERE token_address = 'So11111111111111111111111111111111111111112'
 ),
@@ -538,16 +615,12 @@ SELECT
   -- §5B relative ranks
   orl.rel_rank_flow_imbalance_168h,
   orl.rel_rank_atr_ratio_24_168,
-  -- §5C BTC / SOL market references (rv_eff uses existing btc_rv_24h / sol_rv_24h)
-  ob.btc_atr_ratio_24_168,
-  ob.btc_parkinson_rv_24h,
-  ob.btc_clv_mean_24h,
-  ob.btc_squeeze_pctile_720h,
+  -- §5C / BTC-OHLCV (2026-07-05): BTC & SOL market-regime features (broadcast
+  -- by price_timestamp); rv_eff uses the existing close-derived btc_rv_24h /
+  -- sol_rv_24h as denominator.
+  ob.* EXCEPT (price_timestamp),
   CAST(SAFE_DIVIDE(ob.btc_parkinson_rv_24h, NULLIF(ff.btc_rv_24h, 0.0)) AS FLOAT64) AS btc_rv_eff_ratio_24h,
-  os.sol_atr_ratio_24_168,
-  os.sol_parkinson_rv_24h,
-  os.sol_clv_mean_24h,
-  os.sol_squeeze_pctile_720h,
+  os.* EXCEPT (price_timestamp),
   CAST(SAFE_DIVIDE(os.sol_parkinson_rv_24h, NULLIF(ff.sol_rv_24h, 0.0)) AS FLOAT64) AS sol_rv_eff_ratio_24h
 FROM final_features ff
 LEFT JOIN ohlc_token_features otf

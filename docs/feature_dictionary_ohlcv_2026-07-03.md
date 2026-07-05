@@ -123,9 +123,51 @@ NULL for non-universe rows.
 - `squeeze_pctile_720h` ships the full percent-rank form (not the z-score
   fallback); cost is a 720-float array per row (§6.1 warning).
 
+## BTC / SOL market-regime features (2026-07-05 build)
+
+Single-series OHLCV features on the BTC (`btcusdt`) and SOL (`So111…112`)
+candles, one value per `price_timestamp` broadcast to every altcoin row by
+the `price_timestamp` join — a market-level *regime* signal, not a
+cross-sectional one. They reuse the exact per-token recipes above (a
+single-token `PARTITION BY token_address` window in `rl_ohlc_candle_features`
+*is* the single series), so no new computation — they are surfaced from that
+table with `btc_`/`sol_` prefixes.
+
+**Already shipped (not rebuilt):** `{btc,sol}_atr_ratio_24_168`,
+`_parkinson_rv_24h`, `_clv_mean_24h`, `_squeeze_pctile_720h`,
+`_rv_eff_ratio_24h`.
+
+**Added Tier-1 (each with both `btc_` and `sol_` prefix):**
+`flow_imbalance_24h/168h`, `ad_slope_168h`, `ad_price_diverge_168h`,
+`mfi_24h`, `vwap_dist_24h/168h`, `wick_asym_24h`, `atr_24h`, `atr_168h`,
+`range_z_24h`, `nr_pctrank_24h`, `cs_spread_24h_bps`, `cs_spread_z_168h`,
+`adx_24h`, `adx_168h`, `di_diff_24h`, `choppiness_168h`, `vortex_24h`,
+`er_24h`, `er_168h`, `dist_to_true_high_24h/168h/720h`,
+`dist_to_true_low_24h/168h`, `true_breakout_high_24h`, `true_breakout_low_24h`,
+`true_range_pos_168h`, `bars_since_true_high_168h`, `gk_rv_24h`, `rs_rv_24h`.
+Formulas/windows/ranges are identical to the per-token columns of the same
+suffix above.
+
+**Deliberately not surfaced** (degenerate on an always-liquid reference
+series, per §2): `{btc,sol}_zero_range_frac_24h` (always 0),
+`_range_impact_24h` (no liquidity signal), per-bar `_clv_1h` (ship smoothed
+`_clv_mean_*`).
+
+**Tier-2 (§7, gated):** not built. The spec gates Tier-2 on the Tier-1
+cross-regime stability audit, which is downstream (no warehouse here). Add in
+a second pass if Tier-1 clears the §7 adoption bar.
+
+**Adoption gate (§7):** BTC/SOL features are judged on *cross-regime sign
+stability* of per-regime TS-IC vs forward universe-median return — the 5
+pre-existing OHLCV refs failed exactly there (e.g. `btc_clv_mean_24h` TS-IC
+−0.34 bull / +0.07 crash). Run that audit before retraining.
+
 ## Validation
 
-`analyses/20m_eval_ohlc_feature_validation.sql` implements §8.1 (warm-up),
-§8.3 (bounds), §8.5 (estimator sanity), §8.6 (universe/rank consistency).
-Every row returns `failing_rows` (0 == pass). Not yet executed against
-BigQuery in this environment (no warehouse keyfile available).
+- `analyses/20m_eval_ohlc_feature_validation.sql` — per-token §8.1 (warm-up),
+  §8.3 (bounds), §8.5 (estimator sanity), §8.6 (universe/rank consistency).
+- `analyses/20m_eval_btc_sol_regime_validation.sql` — BTC/SOL §7.4
+  join-broadcast (one distinct value per timestamp) and §6.3 bounds.
+
+Every row returns `failing_rows` (0 == pass). Compiled under dbt 1.10.9; not
+yet executed against BigQuery in this environment (no warehouse keyfile).
