@@ -162,12 +162,55 @@ stability* of per-regime TS-IC vs forward universe-median return — the 5
 pre-existing OHLCV refs failed exactly there (e.g. `btc_clv_mean_24h` TS-IC
 −0.34 bull / +0.07 crash). Run that audit before retraining.
 
+## Horizon / rotation / regime features (2026-07-07 build, 26 cols)
+
+Four blocks serving the 2–4 week rotation, 50/100/200-day regime, and
+token-lifecycle clocks (the existing features stop at 168h).
+
+**Model layout.** Block A (per-token, heavy 90d + unbounded-ATH windows) is a
+new materialized table `rl_token_horizon_features`, computed over the *full*
+per-token history from `20m_cv_prod_72_7d_before` (not the filtered
+`eval_dataset`) so ATH and long windows are correct. Block B (SOL, single
+series) is computed inline in the view from `cv_btc_sol_1h`. Blocks C/D
+(cross-sectional) are in the view. All reuse the existing price series and
+recipes (arithmetic `drawdown`/`dist_to_sma`, EXP-sum-logret `cumret`,
+log-price-rel gaps, OLS log-close slope). Build order:
+`dbt run -s rl_token_horizon_features` before the view.
+
+**A. token rotation/lifecycle (9)** — `cumret_14d`, `cumret_30d` (w336/w720);
+`drawdown_14d`, `drawdown_30d` (`price/MAX-1`, ≤0); `dist_to_sma_336h`,
+`dist_to_sma_720h` (`price/AVG-1`); `log_gap_from_90d_high` (w2160, ≤0);
+`log_gap_from_ath` (unbounded, ≤0, from bar 1); `ath_recency_frac`
+(`bars_since_ath/(rn-1)`, [0,1], NULL on bar 1).
+
+**B. SOL regime (8)** — `sol_dist_to_sma_50d/100d/200d` (w1200/2400/4800);
+`sol_drawdown_from_180d_high` (log, w4320, ≤0); `sol_cumret_14d/30d`
+(w336/w720); `sol_trend_slope_30d/90d` (OLS log-close, w720/w2160). One value
+per `price_timestamp`, broadcast to all altcoin rows.
+
+**C. universe breadth (3)** — `univ_pct_above_sma_720h`,
+`univ_frac_near_30d_high` (within 5% of 30d high, `log_gap_from_30d_high >
+LN(0.95)`), `univ_med_cumret_30d`. Active-universe aggregates per timestamp.
+
+**D. relative rotation (6)** — `rel_rank_cumret_14d`, `rel_rank_cumret_30d`,
+`rel_rank_drawdown_7d` (active-universe percent-ranks, [0,1]);
+`rel_excess_vs_sol_7d/14d/30d` (`cumret_Nd − sol_cumret_Nd`, mirroring
+`rel_excess_vs_btc_*`).
+
+Per the 2026-07-08 reprioritization: Block D is the flagship (regime-neutral);
+raw `cumret_14d/30d` are momentum-family (down-market harm) shipped mainly as
+`rel_excess` intermediates; Block B must be tested on both configs. Every
+column faces the residual-IC-vs-nearest-sibling gate downstream before retrain.
+
 ## Validation
 
 - `analyses/20m_eval_ohlc_feature_validation.sql` — per-token §8.1 (warm-up),
   §8.3 (bounds), §8.5 (estimator sanity), §8.6 (universe/rank consistency).
 - `analyses/20m_eval_btc_sol_regime_validation.sql` — BTC/SOL §7.4
   join-broadcast (one distinct value per timestamp) and §6.3 bounds.
+- `analyses/20m_eval_horizon_feature_validation.sql` — 2026-07-07 blocks:
+  §5.3 bounds, §5.4 nesting invariants (log-gap and drawdown), §5.1 warm-up,
+  SOL/univ broadcast, and rel-rank centering.
 
 Every row returns `failing_rows` (0 == pass). Compiled under dbt 1.10.9; not
 yet executed against BigQuery in this environment (no warehouse keyfile).

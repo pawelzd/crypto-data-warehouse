@@ -418,6 +418,99 @@ relative_ranks AS (
   FROM active_universe_rows
 ),
 
+-- ============================================================================
+-- Horizon / rotation / regime features (spec 2026-07-07).
+-- Block A per-token long-horizon features come from the materialized table
+-- rl_token_horizon_features (heavy 90d/ATH windows kept out of this view).
+-- Block B is the single SOL series (cheap) computed inline from cv_btc_sol_1h.
+-- Blocks C/D are cross-sectional and computed here from Block A + active_universe.
+-- ============================================================================
+token_horizon AS (
+  SELECT * FROM {{ ref('rl_token_horizon_features') }}
+),
+
+-- §4B SOL regime block: single-series long windows on the existing SOL series
+-- (cv_btc_sol_1h), broadcast to every altcoin row by price_timestamp. Recipes
+-- match the existing sol_* columns: arithmetic dist_to_sma (price/AVG-1),
+-- EXP-sum-logret cumret, OLS log-close trend slope; drawdown_from_180d_high is
+-- the log form per spec §4B.
+sol_regime AS (
+  SELECT
+    s.price_timestamp,
+    IF(s.row_idx >= 1200, SAFE_DIVIDE(s.sol_close, NULLIF(AVG(s.sol_close) OVER w1200, 0.0)) - 1, NULL) AS sol_dist_to_sma_50d,
+    IF(s.row_idx >= 2400, SAFE_DIVIDE(s.sol_close, NULLIF(AVG(s.sol_close) OVER w2400, 0.0)) - 1, NULL) AS sol_dist_to_sma_100d,
+    IF(s.row_idx >= 4800, SAFE_DIVIDE(s.sol_close, NULLIF(AVG(s.sol_close) OVER w4800, 0.0)) - 1, NULL) AS sol_dist_to_sma_200d,
+    IF(s.row_idx >= 4320, COALESCE(SAFE.LN(SAFE_DIVIDE(s.sol_close, NULLIF(MAX(s.sol_close) OVER w4320, 0.0))), 0.0), NULL) AS sol_drawdown_from_180d_high,
+    IF(s.row_idx >= 336, EXP(SUM(s.sol_logret_1h) OVER w336) - 1, NULL) AS sol_cumret_14d,
+    IF(s.row_idx >= 720, EXP(SUM(s.sol_logret_1h) OVER w720) - 1, NULL) AS sol_cumret_30d,
+    IF(s.row_idx >= 720, SAFE_DIVIDE(
+        COVAR_POP(s.sol_ln_close, CAST(s.row_idx AS FLOAT64)) OVER w720,
+        NULLIF(VAR_POP(CAST(s.row_idx AS FLOAT64)) OVER w720, 0.0)), NULL) AS sol_trend_slope_30d,
+    IF(s.row_idx >= 2160, SAFE_DIVIDE(
+        COVAR_POP(s.sol_ln_close, CAST(s.row_idx AS FLOAT64)) OVER w2160,
+        NULLIF(VAR_POP(CAST(s.row_idx AS FLOAT64)) OVER w2160, 0.0)), NULL) AS sol_trend_slope_90d
+  FROM (
+    SELECT
+      ts_hour AS price_timestamp,
+      SAFE_CAST(price AS FLOAT64) AS sol_close,
+      COALESCE(SAFE_CAST(logret_1h AS FLOAT64), 0.0) AS sol_logret_1h,
+      SAFE.LN(SAFE_CAST(price AS FLOAT64)) AS sol_ln_close,
+      ROW_NUMBER() OVER (ORDER BY ts_hour) AS row_idx
+    FROM {{ ref('cv_btc_sol_1h') }}
+    WHERE token_address = 'So11111111111111111111111111111111111111112'
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY ts_hour ORDER BY ts_hour) = 1
+  ) s
+  WINDOW
+    w336  AS (ORDER BY s.price_timestamp ROWS BETWEEN 335  PRECEDING AND CURRENT ROW),
+    w720  AS (ORDER BY s.price_timestamp ROWS BETWEEN 719  PRECEDING AND CURRENT ROW),
+    w1200 AS (ORDER BY s.price_timestamp ROWS BETWEEN 1199 PRECEDING AND CURRENT ROW),
+    w2160 AS (ORDER BY s.price_timestamp ROWS BETWEEN 2159 PRECEDING AND CURRENT ROW),
+    w2400 AS (ORDER BY s.price_timestamp ROWS BETWEEN 2399 PRECEDING AND CURRENT ROW),
+    w4320 AS (ORDER BY s.price_timestamp ROWS BETWEEN 4319 PRECEDING AND CURRENT ROW),
+    w4800 AS (ORDER BY s.price_timestamp ROWS BETWEEN 4799 PRECEDING AND CURRENT ROW)
+),
+
+-- §4C/§4D inputs: Block A columns on the active universe, per (token, timestamp).
+horizon_universe AS (
+  SELECT
+    tf.token_address,
+    tf.price_timestamp,
+    tf.active_universe,
+    tf.log_gap_from_30d_high,
+    tf.drawdown_7d,
+    th.cumret_14d,
+    th.cumret_30d,
+    th.dist_to_sma_720h
+  FROM trend_features tf
+  LEFT JOIN token_horizon th
+    ON tf.token_address = th.token_address
+   AND tf.price_timestamp = th.price_timestamp
+),
+
+-- §4C universe breadth on the rotation clock (recipe matches existing univ_*).
+horizon_univ AS (
+  SELECT
+    price_timestamp,
+    CAST(AVG(CASE WHEN dist_to_sma_720h > 0 THEN 1.0 ELSE 0.0 END) AS FLOAT64) AS univ_pct_above_sma_720h,
+    CAST(AVG(CASE WHEN log_gap_from_30d_high > LN(0.95) THEN 1.0 ELSE 0.0 END) AS FLOAT64) AS univ_frac_near_30d_high,
+    CAST(APPROX_QUANTILES(cumret_30d, 100)[OFFSET(50)] AS FLOAT64) AS univ_med_cumret_30d
+  FROM horizon_universe
+  WHERE active_universe
+  GROUP BY price_timestamp
+),
+
+-- §4D relative rotation ranks (active-universe percent-rank, like existing rel_).
+horizon_rel AS (
+  SELECT
+    token_address,
+    price_timestamp,
+    CAST(PERCENT_RANK() OVER (PARTITION BY price_timestamp ORDER BY cumret_14d) AS FLOAT64) AS rel_rank_cumret_14d,
+    CAST(PERCENT_RANK() OVER (PARTITION BY price_timestamp ORDER BY cumret_30d) AS FLOAT64) AS rel_rank_cumret_30d,
+    CAST(PERCENT_RANK() OVER (PARTITION BY price_timestamp ORDER BY drawdown_7d) AS FLOAT64) AS rel_rank_drawdown_7d
+  FROM horizon_universe
+  WHERE active_universe
+),
+
 -- Per-token OHLC candle features (spec 2026-07-03), materialized separately
 -- in rl_ohlc_candle_features so this view stays within BigQuery's
 -- query-planning complexity limit. See that model for the full derivation.
@@ -621,7 +714,38 @@ SELECT
   ob.* EXCEPT (price_timestamp),
   CAST(SAFE_DIVIDE(ob.btc_parkinson_rv_24h, NULLIF(ff.btc_rv_24h, 0.0)) AS FLOAT64) AS btc_rv_eff_ratio_24h,
   os.* EXCEPT (price_timestamp),
-  CAST(SAFE_DIVIDE(os.sol_parkinson_rv_24h, NULLIF(ff.sol_rv_24h, 0.0)) AS FLOAT64) AS sol_rv_eff_ratio_24h
+  CAST(SAFE_DIVIDE(os.sol_parkinson_rv_24h, NULLIF(ff.sol_rv_24h, 0.0)) AS FLOAT64) AS sol_rv_eff_ratio_24h,
+  -- ===== horizon / rotation / regime (spec 2026-07-07) =====
+  -- Block A: token rotation + lifecycle
+  th.cumret_14d,
+  th.cumret_30d,
+  th.drawdown_14d,
+  th.drawdown_30d,
+  th.dist_to_sma_336h,
+  th.dist_to_sma_720h,
+  th.log_gap_from_90d_high,
+  th.log_gap_from_ath,
+  th.ath_recency_frac,
+  -- Block B: SOL regime (broadcast by price_timestamp)
+  sr.sol_dist_to_sma_50d,
+  sr.sol_dist_to_sma_100d,
+  sr.sol_dist_to_sma_200d,
+  sr.sol_drawdown_from_180d_high,
+  sr.sol_cumret_14d,
+  sr.sol_cumret_30d,
+  sr.sol_trend_slope_30d,
+  sr.sol_trend_slope_90d,
+  -- Block C: universe breadth on the rotation clock
+  hu.univ_pct_above_sma_720h,
+  hu.univ_frac_near_30d_high,
+  hu.univ_med_cumret_30d,
+  -- Block D: relative rotation
+  hrl.rel_rank_cumret_14d,
+  hrl.rel_rank_cumret_30d,
+  hrl.rel_rank_drawdown_7d,
+  CAST(ff.cumret_7d - ff.sol_cumret_7d AS FLOAT64) AS rel_excess_vs_sol_7d,
+  CAST(th.cumret_14d - sr.sol_cumret_14d AS FLOAT64) AS rel_excess_vs_sol_14d,
+  CAST(th.cumret_30d - sr.sol_cumret_30d AS FLOAT64) AS rel_excess_vs_sol_30d
 FROM final_features ff
 LEFT JOIN ohlc_token_features otf
   ON ff.token_address = otf.token_address
@@ -635,3 +759,13 @@ LEFT JOIN ohlc_btc_ref ob
   ON ff.price_timestamp = ob.price_timestamp
 LEFT JOIN ohlc_sol_ref os
   ON ff.price_timestamp = os.price_timestamp
+LEFT JOIN token_horizon th
+  ON ff.token_address = th.token_address
+ AND ff.price_timestamp = th.price_timestamp
+LEFT JOIN sol_regime sr
+  ON ff.price_timestamp = sr.price_timestamp
+LEFT JOIN horizon_univ hu
+  ON ff.price_timestamp = hu.price_timestamp
+LEFT JOIN horizon_rel hrl
+  ON ff.token_address = hrl.token_address
+ AND ff.price_timestamp = hrl.price_timestamp
