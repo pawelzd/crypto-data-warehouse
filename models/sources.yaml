@@ -131,3 +131,19 @@ sources:
         description: "Cross-validation table for EMA 21 and 50 calculations."
       - name: cv_ema21_ema50_calc_new_method
         description: "Cross-validation table for EMA 14 and 50 calculations."
+
+  - name: features_extra
+    description: >
+      Outputs of the offline daily side-pipeline (features-extra repo,
+      daily_info_structure_features.py): A2 lead-lag network and Tier C
+      (Levy area / volume-time momentum). Produced by an external Python job,
+      not dbt; consumed by rl_inference_features_ext_v.
+    database: crypto-trading-474111
+    schema: features_extra
+    tables:
+      - name: leadlag_daily
+        description: "Per run_date, each token's up-to-5 leaders with margin (A2)."
+      - name: leadlag_token_scores_daily
+        description: "Per run_date, per-token lead_score_90d (A2)."
+      - name: tier_c_features_hourly
+        description: "Hourly levy_pv_168h and mom_vt_7vd (Tier C)."
