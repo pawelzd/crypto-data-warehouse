@@ -25,13 +25,23 @@ WITH sol_series AS (
   QUALIFY ROW_NUMBER() OVER (PARTITION BY ts_hour ORDER BY ts_hour) = 1
 ),
 
+-- raw per-bar volume (72_7d_before only exposes volume aggregates, not the bar);
+-- dvol_1h = price * volume, matching the view's dollar-volume construction.
+vol_series AS (
+  SELECT
+    address,
+    datetime,
+    MAX(SAFE_CAST(volume AS FLOAT64)) AS volume
+  FROM {{ ref('20m_cv_prod_filled_hours') }}
+  GROUP BY address, datetime
+),
+
 i0 AS (
   SELECT
     t.token_address,
     t.ts_hour AS price_timestamp,
     SAFE_CAST(t.price AS FLOAT64)  AS price,
-    SAFE_CAST(t.volume AS FLOAT64) AS volume,
-    SAFE_CAST(t.price AS FLOAT64) * SAFE_CAST(t.volume AS FLOAT64) AS dvol_1h,
+    SAFE_CAST(t.price AS FLOAT64) * v.volume AS dvol_1h,
     COALESCE(SAFE_CAST(t.logret_1h AS FLOAT64), 0.0) AS logret_1h,
     SAFE_CAST(t.std_ret_24h AS FLOAT64)  AS std_ret_24h,
     SAFE_CAST(t.volume_z_24h AS FLOAT64) AS volume_z_24h,
@@ -53,6 +63,8 @@ i0 AS (
     ON t.ts_hour = mi.price_timestamp
   LEFT JOIN sol_series sol
     ON t.ts_hour = sol.price_timestamp
+  LEFT JOIN vol_series v
+    ON t.token_address = v.address AND t.ts_hour = v.datetime
 ),
 
 -- per-bar helpers: bulk-classification toxicity, jump terms, hot flag
