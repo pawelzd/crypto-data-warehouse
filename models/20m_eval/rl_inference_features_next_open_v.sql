@@ -1,5 +1,7 @@
 {{ config(
-    materialized='view'
+    materialized='table',
+    partition_by={'field': 'price_timestamp', 'data_type': 'timestamp', 'granularity': 'day'},
+    cluster_by=['token_address']
 ) }}
 
 {% set trade_size_usd = var('trade_size_usd', 250.0) %}
