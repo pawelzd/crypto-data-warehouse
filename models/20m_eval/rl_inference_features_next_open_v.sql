@@ -511,6 +511,32 @@ horizon_rel AS (
   WHERE active_universe
 ),
 
+-- ============================================================================
+-- Information-structure features (novel-features spec 2026-07-08).
+-- Per-token blocks A1/A3/B1/B2 come from rl_info_structure_features; the meme
+-- index (§2 helpers) from rl_meme_index; B3 herding is assembled here from the
+-- index variance and the cross-sectional mean of per-token return variance.
+-- ============================================================================
+meme_index AS (
+  SELECT * FROM {{ ref('rl_meme_index') }}
+),
+info_structure AS (
+  SELECT * FROM {{ ref('rl_info_structure_features') }}
+),
+-- B3: per-timestamp active-universe mean of each token's rolling return variance.
+herding_agg AS (
+  SELECT
+    tf.price_timestamp,
+    AVG(isf._var_168h) AS _univ_mean_var_168h,
+    AVG(isf._var_720h) AS _univ_mean_var_720h
+  FROM trend_features tf
+  JOIN info_structure isf
+    ON tf.token_address = isf.token_address
+   AND tf.price_timestamp = isf.price_timestamp
+  WHERE tf.active_universe
+  GROUP BY tf.price_timestamp
+),
+
 -- Per-token OHLC candle features (spec 2026-07-03), materialized separately
 -- in rl_ohlc_candle_features so this view stays within BigQuery's
 -- query-planning complexity limit. See that model for the full derivation.
@@ -745,7 +771,17 @@ SELECT
   hrl.rel_rank_drawdown_7d,
   CAST(ff.cumret_7d - ff.sol_cumret_7d AS FLOAT64) AS rel_excess_vs_sol_7d,
   CAST(th.cumret_14d - sr.sol_cumret_14d AS FLOAT64) AS rel_excess_vs_sol_14d,
-  CAST(th.cumret_30d - sr.sol_cumret_30d AS FLOAT64) AS rel_excess_vs_sol_30d
+  CAST(th.cumret_30d - sr.sol_cumret_30d AS FLOAT64) AS rel_excess_vs_sol_30d,
+  -- ===== information structure (spec 2026-07-08) =====
+  -- §2 index helpers
+  mi.idx_logret_1h,
+  mi.idx_cumret_7d,
+  mi.idx_cumret_30d,
+  -- A1 idio momentum / A3 dormancy / B1 VPIN / B2 jump decomposition
+  isf.* EXCEPT (token_address, price_timestamp, _var_168h, _var_720h),
+  -- B3 herding = idx return variance / cross-sectional mean token variance
+  CAST(SAFE_DIVIDE(mi.idx_var_168h, NULLIF(ha._univ_mean_var_168h, 0.0)) AS FLOAT64) AS herding_ratio_168h,
+  CAST(SAFE_DIVIDE(mi.idx_var_720h, NULLIF(ha._univ_mean_var_720h, 0.0)) AS FLOAT64) AS herding_ratio_720h
 FROM final_features ff
 LEFT JOIN ohlc_token_features otf
   ON ff.token_address = otf.token_address
@@ -769,3 +805,10 @@ LEFT JOIN horizon_univ hu
 LEFT JOIN horizon_rel hrl
   ON ff.token_address = hrl.token_address
  AND ff.price_timestamp = hrl.price_timestamp
+LEFT JOIN meme_index mi
+  ON ff.price_timestamp = mi.price_timestamp
+LEFT JOIN info_structure isf
+  ON ff.token_address = isf.token_address
+ AND ff.price_timestamp = isf.price_timestamp
+LEFT JOIN herding_agg ha
+  ON ff.price_timestamp = ha.price_timestamp

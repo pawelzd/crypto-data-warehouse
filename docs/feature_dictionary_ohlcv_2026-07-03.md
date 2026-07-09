@@ -202,6 +202,50 @@ raw `cumret_14d/30d` are momentum-family (down-market harm) shipped mainly as
 `rel_excess` intermediates; Block B must be tested on both configs. Every
 column faces the residual-IC-vs-nearest-sibling gate downstream before retrain.
 
+## Information-structure features (2026-07-08 build, 19 cols)
+
+Blocks that change the *information structure* (memory / cross-section /
+measurement), not per-bar transforms of the same price/volume marginal. Built
+in SQL; A2 lead-lag (Python side-pipeline) and C1/C2 (offline) are deferred.
+
+**Model layout.** Two new tables: `rl_meme_index` (per-timestamp equal-weight
+active-universe index — `idx_logret_1h`, `idx_cumret_7d/30d`, and idx variance
+for herding; replicates the view's `active_universe` predicate to break the
+dependency loop) and `rl_info_structure_features` (per-token A1/A3/B1/B2 with
+the 60d/w1440 rolling covariance kept out of the view). Index helpers, the
+per-token join, and B3 herding are assembled in the view. Build order:
+`rl_meme_index` → `rl_info_structure_features` → view.
+
+**§2 index helpers (3)** — `idx_logret_1h` (active-universe `AVG(logret_1h)`),
+`idx_cumret_7d/30d` (`SUM(idx_logret_1h)` over w168/w720 timestamp series, log
+cumret). Note: `idx_cumret_*` are log sums per spec, whereas the incumbent
+`cumret_7d`/`sol_cumret_7d` are simple `EXP(Σ)−1` — a documented spec asymmetry
+in `idio_mom_idx_*`.
+
+**A1 idio momentum (6)** — `beta_sol_60d`, `beta_idx_60d`
+(`COVAR/VAR` over w1440, winsorized [−2,5]); `idio_mom_sol_7d`,
+`idio_mom_idx_7d` (`cumret_7d − β·ref_cumret_7d`); `idio_mom_idx_30d`;
+`idio_vol_share_60d` (`1 − CORR²`, [0,1]). Tested downstream as a **swap** for
+`rel_excess_vs_btc_*`, not an add.
+
+**A3 dormancy (2)** — `dormancy_days_log` (`LN(1 + dormancy_h/24)`),
+`reawakening_score` (`dormancy_days_log · GREATEST(volume_z_24h,0)`); non-zero
+only when a long-dormant token bursts now.
+
+**B1 VPIN proxy (3)** — `vpin_24h`, `vpin_168h`
+(`Σ|tanh(0.851·z)|·dvol / Σdvol`, [0,1]), `vpin_z_30d` (z over w720). Wall-clock
+buckets, not equal-volume — the SQL-feasible proxy.
+
+**B2 jump decomposition (3)** — `jump_share_24h`, `jump_share_168h`
+(`(RV−BPV)⁺/RV`, [0,1]), `downside_semivar_share_24h`.
+
+**B3 herding (2)** — `herding_ratio_168h`, `herding_ratio_720h`
+(`Var(idx) / mean_i Var_i`, ~[1/N,1]; higher = universe moving as one).
+
+Per §0-bis: build SQL blocks first (testable next day); A2 is the flagship but
+needs the daily pipeline; context blocks (VPIN, herding) screened on config B
+only. Residual-IC-vs-sibling gate applies to every column downstream.
+
 ## Validation
 
 - `analyses/20m_eval_ohlc_feature_validation.sql` — per-token §8.1 (warm-up),
@@ -211,6 +255,9 @@ column faces the residual-IC-vs-nearest-sibling gate downstream before retrain.
 - `analyses/20m_eval_horizon_feature_validation.sql` — 2026-07-07 blocks:
   §5.3 bounds, §5.4 nesting invariants (log-gap and drawdown), §5.1 warm-up,
   SOL/univ broadcast, and rel-rank centering.
+- `analyses/20m_eval_infostructure_validation.sql` — 2026-07-08 blocks:
+  §7.2 bounds, §7.3 beta-residual identity, §7.1 warm-up, idx/herding broadcast,
+  and §7.4 regime sanity (herding / downside-semivar / vpin-z crash > bull).
 
 Every row returns `failing_rows` (0 == pass). Compiled under dbt 1.10.9; not
 yet executed against BigQuery in this environment (no warehouse keyfile).
