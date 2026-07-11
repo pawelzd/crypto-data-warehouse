@@ -246,6 +246,31 @@ Per §0-bis: build SQL blocks first (testable next day); A2 is the flagship but
 needs the daily pipeline; context blocks (VPIN, herding) screened on config B
 only. Residual-IC-vs-sibling gate applies to every column downstream.
 
+## Momentum / pullback quality features (2026-07-11 build, 5 cols)
+
+Nonlinear reorderings (z / corr / fraction / skew) of existing channels — they
+create cross-sectional ordering no current column has (the explicit bet vs the
+rank-preserving adds that washed). Per-token in a new table
+`rl_quality_features` (full history from `20m_cv_prod_72_7d_before`), joined
+into the base. Grade *which strong, liquid, pulling-back tokens continue vs
+break down* — the discrimination the momentum-on-pullback policy makes blind.
+
+| column | formula | window | range |
+|---|---|---|---|
+| `pullback_z_720h` | z-score of `drawdown_7d` vs its own 720h history | 720 | unbounded (≈0 median) |
+| `vol_mom_align_168h` | population Pearson corr(`logret_1h`, `volume_z_24h`) | 168 | [−1,1] |
+| `up_bar_frac_72h` | `AVG(logret_1h > 0)` — grind vs spike | 72 | [0,1] |
+| `momentum_accel_24_168` | `cumret_24h − cumret_7d·24/168` — early vs late | — | unbounded (≈0 median) |
+| `ret_skew_168h` | population skew of `logret_1h` (moment form), winsorized | 168 | [−10,10] |
+
+`ret_skew_168h` uses the moment expansion `(E[x³] − 3mE[x²] + 2m³)/s³` (single
+pass over `AVG(logret)`, `AVG(logret²)`, `AVG(logret³)`), not a nested windowed
+mean. The **§4.5 degeneracy gate** is the point: within-timestamp
+Spearman(`pullback_z_720h`, `drawdown_7d`) must be < 0.98 (else the z-score
+collapsed to another rank-preserving dead transform); same for
+`momentum_accel` vs `cumret_24h`. Downstream: residual-IC vs sibling, screen at
+n≥8 (n=4 is triage only).
+
 ## Validation
 
 - `analyses/20m_eval_ohlc_feature_validation.sql` — per-token §8.1 (warm-up),
@@ -258,6 +283,9 @@ only. Residual-IC-vs-sibling gate applies to every column downstream.
 - `analyses/20m_eval_infostructure_validation.sql` — 2026-07-08 blocks:
   §7.2 bounds, §7.3 beta-residual identity, §7.1 warm-up, idx/herding broadcast,
   and §7.4 regime sanity (herding / downside-semivar / vpin-z crash > bull).
+- `analyses/20m_eval_quality_feature_validation.sql` — 2026-07-11 quality block:
+  §4.2 bounds, §4.1 warm-up, §4.5 degeneracy (within-ts Spearman < 0.98 vs
+  sibling), §4.4 sign sanity.
 
 Every row returns `failing_rows` (0 == pass). Compiled under dbt 1.10.9; not
 yet executed against BigQuery in this environment (no warehouse keyfile).

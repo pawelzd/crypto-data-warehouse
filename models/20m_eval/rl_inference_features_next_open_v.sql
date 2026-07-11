@@ -525,6 +525,10 @@ meme_index AS (
 info_structure AS (
   SELECT * FROM {{ ref('rl_info_structure_features') }}
 ),
+-- Momentum/pullback QUALITY features (spec 2026-07-11), per-token.
+quality_features AS (
+  SELECT * FROM {{ ref('rl_quality_features') }}
+),
 -- B3: per-timestamp active-universe mean of each token's rolling return variance.
 herding_agg AS (
   SELECT
@@ -783,7 +787,13 @@ SELECT
   isf.* EXCEPT (token_address, price_timestamp, _var_168h, _var_720h),
   -- B3 herding = idx return variance / cross-sectional mean token variance
   CAST(SAFE_DIVIDE(mi.idx_var_168h, NULLIF(ha._univ_mean_var_168h, 0.0)) AS FLOAT64) AS herding_ratio_168h,
-  CAST(SAFE_DIVIDE(mi.idx_var_720h, NULLIF(ha._univ_mean_var_720h, 0.0)) AS FLOAT64) AS herding_ratio_720h
+  CAST(SAFE_DIVIDE(mi.idx_var_720h, NULLIF(ha._univ_mean_var_720h, 0.0)) AS FLOAT64) AS herding_ratio_720h,
+  -- ===== momentum / pullback quality (spec 2026-07-11) =====
+  qf.pullback_z_720h,
+  qf.vol_mom_align_168h,
+  qf.up_bar_frac_72h,
+  qf.momentum_accel_24_168,
+  qf.ret_skew_168h
 FROM final_features ff
 LEFT JOIN ohlc_token_features otf
   ON ff.token_address = otf.token_address
@@ -814,3 +824,6 @@ LEFT JOIN info_structure isf
  AND ff.price_timestamp = isf.price_timestamp
 LEFT JOIN herding_agg ha
   ON ff.price_timestamp = ha.price_timestamp
+LEFT JOIN quality_features qf
+  ON ff.token_address = qf.token_address
+ AND ff.price_timestamp = qf.price_timestamp
