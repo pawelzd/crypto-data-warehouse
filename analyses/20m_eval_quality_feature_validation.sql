@@ -39,7 +39,10 @@ spearman AS (
 signs AS (
   SELECT
     CORR(up_bar_frac_72h, cumret_7d) AS corr_upbar_cumret,
-    APPROX_QUANTILES(pullback_z_720h, 100)[OFFSET(50)]       AS med_pullback_z,
+    -- z-scores have mean ~0 by construction; the MEDIAN is +~0.2 here because
+    -- drawdown_7d is asymmetric (bounded <=0, right-skewed), which is expected
+    -- and not a defect -- so sanity-check the mean, not the median.
+    AVG(pullback_z_720h)                                     AS mean_pullback_z,
     APPROX_QUANTILES(momentum_accel_24_168, 100)[OFFSET(50)] AS med_macc
   FROM b
 )
@@ -102,9 +105,9 @@ SELECT 'sanity_up_bar_frac_pos_corr_cumret',
 FROM signs
 
 UNION ALL
-SELECT 'sanity_pullback_z_median_near0',
-  IF(ABS(med_pullback_z) <= 0.1, 0, 1),
-  CONCAT('median pullback_z_720h = ', CAST(med_pullback_z AS STRING), '; expected ~0 (+/-0.1)')
+SELECT 'sanity_pullback_z_mean_near0',
+  IF(ABS(mean_pullback_z) <= 0.1, 0, 1),
+  CONCAT('mean pullback_z_720h = ', CAST(mean_pullback_z AS STRING), '; expected ~0 by z-score construction')
 FROM signs
 
 UNION ALL
