@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: rl_prod_hourly_bars_v
+    description: >
+      Bounded, gap-filled hourly price/volume view read directly from production
+      sources. It is the only raw-data entry point for live RL inference.
+    columns:
+      - name: token_address
+        tests: [not_null]
+      - name: price_timestamp
+        tests: [not_null]
+
+  - name: rl_prod_asset_features_v
+    description: >
+      Shared rolling feature calculations for monitored tokens and the BTC/SOL
+      reference series. This is an internal production view.
+
+  - name: rl_prod_hourly_bars_history_v
+    description: >
+      Unbounded hourly source history used only for historical feature-parity
+      checks. It is intentionally excluded from the live inference graph.
+
+  - name: rl_prod_asset_features_history_v
+    description: >
+      Full-history instance of the same shared rolling-feature SQL used by the
+      bounded live asset-feature view.
+
+  - name: rl_prod_universe_membership_pit
+    description: >
+      Materialized stateful weekly point-in-time membership. Entry requires a
+      trailing-30d $20M median market cap and top-120 dollar-volume rank; exit
+      uses the $5M/two-week and rank-250/four-week hysteresis rules.
+    columns:
+      - name: token_address
+        tests: [not_null]
+      - name: week_start
+        tests: [not_null]
+      - name: in_universe_pit
+        tests: [not_null]
+
+  - name: rl_prod_inference_features_v
+    description: >
+      Live dip10-s1 inference contract: exactly 100 observation features plus
+      8 execution, cost, gate, and universe-selection columns.
+    columns:
+      - name: token_address
+        tests: [not_null]
+      - name: price_timestamp
+        tests: [not_null]
+      - name: next_open
+        tests: [not_null]
+      - name: next_next_open
+        tests: [not_null]
+      - name: dollar_amihud_24h
+        tests: [not_null]
+      - name: mktcap
+        tests: [not_null]
+      - name: dollar_vol_24h
+        tests: [not_null]
+      - name: in_universe_pit
+        tests: [not_null]
+      - name: rel_excess_vs_btc_7d
+        tests: [not_null]
+      - name: rel_excess_vs_btc_24h
+        tests: [not_null]
+
+  - name: rl_prod_inference_features_history_v
+    description: >
+      Full-history candidate/coverage relation. It retains nonmembers for
+      warm-up and death context and exposes in_universe_pit for episode gating.
+    columns:
+      - name: rel_excess_vs_btc_7d
+        tests: [not_null]
+      - name: rel_excess_vs_btc_24h
+        tests: [not_null]

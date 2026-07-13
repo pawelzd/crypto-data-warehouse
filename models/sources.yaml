@@ -147,3 +147,39 @@ sources:
         description: "Per run_date, per-token lead_score_90d (A2)."
       - name: tier_c_features_hourly
         description: "Hourly levy_pv_168h and mom_vt_7vd (Tier C)."
+
+  - name: rl_prod_artifacts
+    description: >
+      Immutable, versioned model-contract artifacts copied from the trusted
+      dip10-s1 export. These tables remove any runtime dependency on 20m_eval.
+    database: crypto-trading-474111
+    schema: rl_prod
+    tables:
+      - name: training_universe_contract_v1
+        description: >
+          The 423 training tokens and their exact inclusive active intervals.
+          Version this artifact whenever the deployed model changes.
+      - name: btc_reference_contract_v1
+        description: >
+          Hourly BTC log return and 24h/7d cumulative returns through the
+          trusted-export cutoff. Production fails closed after its last hour.
+      - name: ohlcv_revision_override_v1
+        description: >
+          Trusted hourly price and volume for the eight tokens whose source
+          history was revised after training. Applied only where keys exist.
+
+  - name: scam_detection_artifacts
+    description: >
+      Materialized scam exclusions produced independently of dbt by the
+      full-history OHLCV detector.
+    database: crypto-trading-474111
+    schema: scam_detection
+    tables:
+      - name: scam_full_history_detections
+        description: >
+          Per-token, per-window evidence from the full-history detector. Death
+          patterns are audit signals and are not consumed as lifetime filters.
+      - name: scam_full_history_fixed
+        description: >
+          Raw one-row-per-token detector output. Kept for audit; production
+          filtering uses hardened evidence from scam_full_history_detections.

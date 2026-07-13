@@ -1,8 +1,18 @@
 {{ config(
   schema='core',
   materialized='incremental',
+  full_refresh=false,
   incremental_strategy='merge',
-  unique_key=['token_address','price_timestamp','chain'],   
+  unique_key=['token_address','price_timestamp','chain'],
+  partition_by={
+    'field': 'price_timestamp',
+    'data_type': 'timestamp',
+    'granularity': 'day'
+  },
+  cluster_by=['chain', 'token_address'],
+  incremental_predicates=[
+    "DBT_INTERNAL_DEST.price_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)"
+  ],
   on_schema_change='sync_all_columns',
   merge_update_columns=['close','high','open','low','volume','chain'] 
 ) }}

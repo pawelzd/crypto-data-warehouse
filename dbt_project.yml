@@ -43,6 +43,9 @@ models:
     20m_eval:
       +materialized: table
       +schema: 20m_eval
+    rl_prod:
+      +materialized: view
+      +schema: rl_prod
     ml:
       +materialized: table
       +schema: ml
