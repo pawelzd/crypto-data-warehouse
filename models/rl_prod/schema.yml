@@ -26,17 +26,27 @@ models:
       Full-history instance of the same shared rolling-feature SQL used by the
       bounded live asset-feature view.
 
+  - name: rl_prod_universe_weekly_inputs_v2
+    description: >
+      Threshold-free weekly PIT measurements for the shared v2 state builder.
+      Includes observed-hour continuity, trailing liquidity/size statistics,
+      and scam evidence whose windows end strictly before each week boundary.
+
   - name: rl_prod_universe_membership_pit
     description: >
-      Materialized stateful weekly point-in-time membership. Entry requires a
-      trailing-30d $20M median market cap and top-120 dollar-volume rank; exit
-      uses the $5M/two-week and rank-250/four-week hysteresis rules.
+      Version-gated production membership view. It defaults to the frozen v1
+      snapshot; an explicit dbt variable selects the physical v2 state only
+      after a matching retrain and acceptance decision.
     columns:
       - name: token_address
         tests: [not_null]
       - name: week_start
         tests: [not_null]
       - name: in_universe_pit
+        tests: [not_null]
+      - name: rule_version
+        tests: [not_null]
+      - name: rule_config_hash
         tests: [not_null]
 
   - name: rl_prod_inference_features_v

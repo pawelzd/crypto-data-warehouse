@@ -167,6 +167,19 @@ sources:
         description: >
           Trusted hourly price and volume for the eight tokens whose source
           history was revised after training. Applied only where keys exist.
+      - name: universe_membership_v2_state
+        description: >
+          Physical weekly PIT state produced by the shared v2 Python builder.
+          Rows carry the rule version and canonical YAML configuration hash.
+      - name: universe_membership_v2_weekly
+        description: >
+          Weekly member counts, turnover, contraction alerts, and deployment
+          exposure scalar derived from the v2 membership state.
+      - name: universe_membership_v1_snapshot_20260713
+        description: >
+          Frozen v1 membership preserved before the v2 side-by-side build.
+          This remains the default production relation until a v2 retrain and
+          acceptance decision explicitly selects the v2 dbt variable.
 
   - name: scam_detection_artifacts
     description: >

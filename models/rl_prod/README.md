@@ -9,8 +9,10 @@ The live graph is intentionally small:
    volume, aggregates to an hourly grid, and forward-fills missing closes.
 2. `rl_prod_asset_features_v` computes the shared token/BTC/SOL rolling
    features once.
-3. `rl_prod_universe_membership_pit` stores the stateful weekly point-in-time
-   membership derived from trailing market cap and raw dollar volume.
+3. `rl_prod_universe_weekly_inputs_v2` materializes threshold-free causal
+   weekly measurements. `scripts/universe/universe_membership_v2.py` applies
+   the shared YAML and writes the physical state; `rl_prod_universe_membership_pit`
+   exposes the selected v1/v2 contract.
 4. `rl_prod_inference_features_v` computes universe and relative features over
    members only, joins the reference series, and serves current members.
 
@@ -22,20 +24,19 @@ more expensive than the live graph.
 
 ## Production universe and versioned model contracts
 
-The cross-sectional universe is computed from the current production feature
-inputs. A token is admitted when it has the required 168-hour lookback, passes
-the configured market-cap floor, and does not appear in `scam_h_union`.
-`scam_h_union` consumes hardened full-history evidence. Only born-bad patterns
-with matches spanning more than 90 days, plus manual exclusions, are lifetime
-filters. Death/event patterns remain evidence and are handled by PIT membership
-exit hysteresis; they do not delete pre-collapse history.
+The v2 contract is defined only in
+`config/universe_dynamic_scaling_v2.yml`. Entry requires two consecutive
+weekly passes of causal born-bad evidence, observed-hour continuity, $20M
+trailing median market cap, a hybrid absolute/market-relative dollar-volume
+floor, Amihud and spread quality, then incumbent-first seating under a 150
+member cap. Exit retains the $5M/two-week and rank-250/four-week bands, adds a
+four-week quality-failure band, and immediately removes newly causal born-bad
+evidence. Death/event patterns never erase pre-event history.
 
-Membership entry requires trailing-30d median market cap of at least $20M and
-trailing-30d dollar-volume rank at most 120. Members exit after two consecutive
-weeks below $5M or four consecutive weeks below rank 250. The weekly state is
-rebuilt from complete OHLCV history, but every decision uses only timestamps
-strictly before that week; no CMC snapshot or reconstructed future qualification
-date participates.
+The production view defaults to the frozen v1 snapshot. Selecting v2 requires
+`--vars '{"rl_prod_universe_version": "v2"}'` at the associated retrain/deploy
+boundary. This prevents an ordinary dbt run from silently changing an existing
+checkpoint's cross-sectional feature contract.
 
 The history view retains candidate rows and adds `in_universe_pit` plus raw
 `dollar_vol_24h`; `univ_*` and `rel_*` are still computed only from true
@@ -56,9 +57,10 @@ applied at the hourly-bar layer before returns, rolling windows, universe
 aggregates, ranks, or costs are calculated, and only for artifact keys through
 the trusted cutoff. Later live bars continue from `core.token_ohlcv`.
 
-All three models are BigQuery views in the `rl_prod` dataset. Source changes are
-therefore visible on the next query after `core.token_ohlcv` itself has been
-updated by its incremental dbt job.
+Asset and inference models are BigQuery views. V2 membership is stateful: the
+weekly input table and shared builder must run after OHLCV/scam changes. The
+Monday Airflow DAG performs that sequence and records the YAML SHA-256 hash on
+every state row.
 
 ## Runtime bounds
 
