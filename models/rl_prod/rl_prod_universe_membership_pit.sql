@@ -11,6 +11,11 @@ FROM {{ source('rl_prod_artifacts', 'universe_membership_v2_state') }}
 -- Safe default while v2 is evaluated beside the frozen retrain baseline.
 -- Compatibility columns keep downstream compilation stable without claiming
 -- that v1 was built by the v2 quality contract.
+--
+-- Reads rl_prod_universe_membership_v1_state rather than the snapshot directly.
+-- That model passes the frozen range through unchanged and appends later weeks
+-- under the same v1 rules; the snapshot alone stops at 2026-07-06, which made
+-- every later week resolve to in_universe_pit = FALSE here.
 SELECT
   token_address,
   first_observed_date,
@@ -54,7 +59,7 @@ SELECT
   'universe_pit_v1_snapshot_20260713' AS rule_version,
   REPEAT('0', 64) AS rule_config_hash,
   generated_at
-FROM {{ source('rl_prod_artifacts', 'universe_membership_v1_snapshot_20260713') }}
+FROM {{ ref('rl_prod_universe_membership_v1_state') }}
 
 {% else %}
   {{ exceptions.raise_compiler_error(
