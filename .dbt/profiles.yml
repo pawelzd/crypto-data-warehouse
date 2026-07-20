@@ -1,15 +1,24 @@
 dbt_bq_profile:
-  target: dev
+  target: adc
   outputs:
+    # Application Default Credentials — NO keyfile. This is the production
+    # target: on Cloud Run the attached runtime service account is used
+    # automatically; locally run `gcloud auth application-default login` first.
+    # Credentials are never a committed keyfile — the old SA-key JSONs were
+    # scrubbed from this repo's history during the extraction from airflow-wallets.
+    adc:
+      type: bigquery
+      method: oauth
+      project: crypto-trading-474111
+      dataset: raw
+      threads: 4
+      timeout_seconds: 300
+      location: europe-central2
+
+    # Legacy service-account target, kept for parity with the airflow-wallets
+    # setup. The keyfile is NOT in this repo; supply its path via DBT_BQ_KEYFILE
+    # only if you genuinely need a key (ADC is preferred everywhere, esp. Cloud Run).
     dev:
-      # type: bigquery
-      # method: service-account
-      # project: positive-tuner-255507
-      # dataset: wallets_extraction
-      # threads: 4
-      # timeout_seconds: 300
-      # location: europe-central2
-      # keyfile: /opt/dbt/dbt_bq/positive-tuner-255507-3f858f07cec5.json
       type: bigquery
       method: service-account
       project: crypto-trading-474111
@@ -17,19 +26,4 @@ dbt_bq_profile:
       threads: 4
       timeout_seconds: 300
       location: europe-central2
-      keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-2d5dd30897eb.json
-
-    # Same warehouse as dev, for running dbt from a local .venv instead of the
-    # Airflow container. Identical except for the keyfile: dev's absolute path
-    # only exists inside the image, so this uses a path relative to the dbt
-    # project directory. Invoke with --target local.
-    local:
-      type: bigquery
-      method: service-account
-      project: crypto-trading-474111
-      dataset: raw
-      threads: 4
-      timeout_seconds: 300
-      location: europe-central2
-      keyfile: crypto-trading-474111-2d5dd30897eb.json
-
+      keyfile: "{{ env_var('DBT_BQ_KEYFILE', '') }}"

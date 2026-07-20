@@ -4,3 +4,13 @@ dbt_packages/
 logs/
 dbt_internal_packages/
 .dbt/.user.yml
+.venv/
+
+# Service-account keys must NEVER be committed — this repo authenticates via
+# Application Default Credentials (see .dbt/profiles.yml). The old key JSONs
+# were scrubbed from history during the extraction; keep them out for good.
+/*.json
+**/crypto-trading-*.json
+**/positive-tuner-*.json
+**/databricks.json
+

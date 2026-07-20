@@ -1,0 +1,12 @@
+# Keep the dbt image lean. dbt regenerates target/logs/dbt_packages at build.
+.git/
+.venv/
+target/
+logs/
+dbt_packages/
+dbt_internal_packages/
+**/__pycache__/
+*.pyc
+# Never let a stray key JSON into the image context.
+*.json
+!package-lock.yml
