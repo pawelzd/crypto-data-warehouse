@@ -4,6 +4,13 @@ config-version: 2
 
 profile: 'dbt_bq_profile'
 
+# The RL shadow-decision service reads rl_prod_inference_features_v and needs a
+# deep-enough warm-up window for the recurrent policy (episode = 216 bars), not
+# the original 48h. 300h stays small/fast (members_only) while covering the
+# episode. Keep this in sync with the service's lookback_bars.
+vars:
+  rl_prod_output_hours: 300
+
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
