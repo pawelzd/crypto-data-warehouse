@@ -1,0 +1,10 @@
+# Parameterized Cloud Build config — builds the dbt image in the cloud (no local
+# Docker) and pushes to Artifact Registry.
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_DOCKERFILE=deploy/Dockerfile,_IMAGE=<image> .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "${_DOCKERFILE}", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  logging: CLOUD_LOGGING_ONLY

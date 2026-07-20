@@ -17,9 +17,9 @@ SELECT_MEMBERSHIP_ADVANCE="rl_prod_universe_membership_v1_state"
 SELECT_REFRESH="rl_prod_universe_membership_pit rl_prod_asset_features_v rl_prod_inference_features_v"
 SELECT_TESTS="rl_prod_membership_no_lookahead rl_prod_membership_hysteresis rl_prod_membership_incumbents_first rl_prod_membership_turnover rl_prod_membership_count_band rl_prod_no_scam_tokens rl_prod_universe_internal_consistency"
 
-echo "[deploy] building dbt image -> $IMAGE"
-docker build -f deploy/Dockerfile -t "$IMAGE" .
-docker push "$IMAGE"
+echo "[deploy] building dbt image -> $IMAGE (Cloud Build — no local Docker)"
+gcloud builds submit --project "$PROJECT" --config cloudbuild.yaml \
+  --substitutions="_DOCKERFILE=deploy/Dockerfile,_IMAGE=${IMAGE}" .
 
 deploy_job() {                    # name, command, select
   local name="$1" cmd="$2" select="$3"
