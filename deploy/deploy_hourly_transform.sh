@@ -11,7 +11,7 @@ set -euo pipefail
 PROJECT="${PROJECT:-crypto-trading-474111}"
 REGION="${REGION:-europe-central2}"
 JOB="${JOB:-dbt-run-rl-prod}"
-SCHEDULER_SA="${SCHEDULER_SA:-rl-scheduler@${PROJECT}.iam.gserviceaccount.com}"
+SCHEDULER_SA="${SCHEDULER_SA:-rl-prod@${PROJECT}.iam.gserviceaccount.com}"
 
 JOB_RUN_URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/${JOB}:run"
 gcloud scheduler jobs create http "${JOB}-hourly" \

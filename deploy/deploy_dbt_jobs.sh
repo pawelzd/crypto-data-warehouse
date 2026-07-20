@@ -10,7 +10,7 @@ REGION="${REGION:-europe-central2}"
 REPO="${REPO:-rl}"                                    # Artifact Registry repo
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/crypto-data-warehouse:latest}"
 # Runtime SA needs BigQuery data editor + job user on the target datasets.
-RUNTIME_SA="${RUNTIME_SA:-rl-dbt@${PROJECT}.iam.gserviceaccount.com}"
+RUNTIME_SA="${RUNTIME_SA:-rl-prod@${PROJECT}.iam.gserviceaccount.com}"
 
 # The rl_prod serving-view selectors and the membership test selectors.
 SELECT_MEMBERSHIP_ADVANCE="rl_prod_universe_membership_v1_state"
