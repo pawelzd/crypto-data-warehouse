@@ -18,4 +18,18 @@ dbt_bq_profile:
       timeout_seconds: 300
       location: europe-central2
       keyfile: /opt/dbt/dbt_bq/crypto-trading-474111-2d5dd30897eb.json
-      
+
+    # Same warehouse as dev, for running dbt from a local .venv instead of the
+    # Airflow container. Identical except for the keyfile: dev's absolute path
+    # only exists inside the image, so this uses a path relative to the dbt
+    # project directory. Invoke with --target local.
+    local:
+      type: bigquery
+      method: service-account
+      project: crypto-trading-474111
+      dataset: raw
+      threads: 4
+      timeout_seconds: 300
+      location: europe-central2
+      keyfile: crypto-trading-474111-2d5dd30897eb.json
+
