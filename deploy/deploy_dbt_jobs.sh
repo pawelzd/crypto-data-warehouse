@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."          # repo root
 
 PROJECT="${PROJECT:-crypto-trading-474111}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:-europe-central2}"
 REPO="${REPO:-rl}"                                    # Artifact Registry repo
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/crypto-data-warehouse:latest}"
 # Runtime SA needs BigQuery data editor + job user on the target datasets.

@@ -9,7 +9,7 @@
 set -euo pipefail
 
 PROJECT="${PROJECT:-crypto-trading-474111}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:-europe-central2}"
 JOB="${JOB:-dbt-run-rl-prod}"
 SCHEDULER_SA="${SCHEDULER_SA:-rl-scheduler@${PROJECT}.iam.gserviceaccount.com}"
 
