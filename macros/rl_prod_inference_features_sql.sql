@@ -1,4 +1,10 @@
-{% macro rl_prod_inference_features_sql(asset_features_model, output_hours=none, min_mktcap=0, members_only=false, minimum_member_coverage=0.90) %}
+{% macro rl_prod_inference_features_sql(asset_features_model, output_hours=none, min_mktcap=0, members_only=false, minimum_member_coverage=0.90, include_edge=false) %}
+{# include_edge=true keeps the freshest bar (next_price / next_next_open still
+   NULL) so the LIVE decision service can decide on the latest closed bar rather
+   than waiting ~2h for the t+1 return-mark to settle. The execution price
+   (next_open = the bar's own price) IS present at the edge; only the return-mark
+   is missing, which the live runner fills with the live price. Training/parity
+   views keep include_edge=false so their contract is unchanged. #}
 
 WITH assets AS (
   SELECT * FROM {{ ref(asset_features_model) }}
@@ -16,7 +22,7 @@ candidate_tokens AS (
   FROM assets a
   WHERE a.has_168h
     AND a.mktcap > {{ min_mktcap }}
-    AND a.next_price IS NOT NULL
+    {% if not include_edge %}AND a.next_price IS NOT NULL{% endif %}
     AND NOT EXISTS (
       SELECT 1
       FROM scam_tokens s
@@ -266,7 +272,7 @@ contract AS (
 
 SELECT * EXCEPT(expected_member_count)
 FROM contract
-WHERE next_next_open IS NOT NULL
+{% if include_edge %}WHERE TRUE{% else %}WHERE next_next_open IS NOT NULL{% endif %}
 {% if members_only %}
   AND in_universe_pit
   AND univ_n_active >= expected_member_count * {{ minimum_member_coverage }}
