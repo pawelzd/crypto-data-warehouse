@@ -49,6 +49,38 @@ log_json cycle_start INFO "command=${DBT_COMMAND}" "select=${DBT_SELECT}" "targe
 if dbt "$DBT_COMMAND" --profiles-dir .dbt --target "$DBT_TARGET" \
   --select $DBT_SELECT --fail-fast; then rc=0; else rc=$?; fi
 
+# Business metric after a SUCCESSFUL run: log a scalar/row so a SILENT stall is
+# visible (a dbt 'run' can succeed while membership stops advancing — that is
+# exactly what happened on 2026-07-06). POST_RUN_COUNT_SQL defaults to the
+# universe member count + latest week for any membership select; override/disable
+# via env. Emits a `business_metric` line in the unified envelope.
+if [ "$rc" -eq 0 ]; then
+  if [ -z "${POST_RUN_COUNT_SQL:-}" ] && printf '%s' "$DBT_SELECT" | grep -q membership; then
+    _P="${BQ_PROJECT_ID:-crypto-trading-474111}"
+    POST_RUN_COUNT_SQL="SELECT CAST(MAX(week_start) AS STRING) AS latest_week, COUNTIF(in_universe_pit) AS members FROM \`${_P}.rl_prod.rl_prod_universe_membership_pit\` WHERE week_start = (SELECT MAX(week_start) FROM \`${_P}.rl_prod.rl_prod_universe_membership_pit\`)"
+  fi
+  if [ -n "${POST_RUN_COUNT_SQL:-}" ]; then
+    OBS_SERVICE="$OBS_SERVICE" POST_RUN_COUNT_SQL="$POST_RUN_COUNT_SQL" \
+    BQ_PROJECT_ID="${BQ_PROJECT_ID:-crypto-trading-474111}" \
+    BQ_LOCATION="${BQ_LOCATION:-europe-central2}" python3 - <<'PY' || true
+import os, json, datetime
+def emit(rec):
+    rec.setdefault("ts", datetime.datetime.now(datetime.timezone.utc).isoformat())
+    rec.setdefault("service", os.environ.get("OBS_SERVICE", "dbt-rl-prod"))
+    print(json.dumps(rec, separators=(",", ":"), default=str))
+try:
+    from google.cloud import bigquery
+    c = bigquery.Client(project=os.environ.get("BQ_PROJECT_ID"))
+    rows = list(c.query(os.environ["POST_RUN_COUNT_SQL"],
+                        location=os.environ.get("BQ_LOCATION")).result())
+    emit({"event": "business_metric", "level": "INFO",
+          **(dict(rows[0].items()) if rows else {})})
+except Exception as e:
+    emit({"event": "business_metric_error", "level": "WARNING", "error": repr(e)})
+PY
+  fi
+fi
+
 if [ "$rc" -eq 0 ]; then
   log_json cycle_done INFO "rc=0" "command=${DBT_COMMAND}"
 else
