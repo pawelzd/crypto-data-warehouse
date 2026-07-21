@@ -180,6 +180,12 @@ sources:
           Frozen v1 membership preserved before the v2 side-by-side build.
           This remains the default production relation until a v2 retrain and
           acceptance decision explicitly selects the v2 dbt variable.
+      - name: shadow_decisions
+        description: >
+          Every (model, token, bar) decision from the live shadow-ensemble
+          service (rl-crypto deploy/shadow), appended each hourly cycle with the
+          ledger snapshot. Written by the Cloud Run service, NOT dbt; consumed by
+          the rl_prod_shadow_*_v reporting views (Power BI).
 
   - name: scam_detection_artifacts
     description: >
