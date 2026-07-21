@@ -16,11 +16,11 @@ SCHEDULER_SA="${SCHEDULER_SA:-rl-prod@${PROJECT}.iam.gserviceaccount.com}"
 JOB_RUN_URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/${JOB}:run"
 gcloud scheduler jobs create http "${JOB}-hourly" \
   --project "$PROJECT" --location "$REGION" \
-  --schedule "8 * * * *" --time-zone "Etc/UTC" \
+  --schedule "3 * * * *" --time-zone "Etc/UTC" \
   --uri "$JOB_RUN_URI" --http-method POST \
   --oauth-service-account-email "$SCHEDULER_SA" \
   --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform" \
   || gcloud scheduler jobs update http "${JOB}-hourly" \
-       --project "$PROJECT" --location "$REGION" --schedule "8 * * * *" --uri "$JOB_RUN_URI"
+       --project "$PROJECT" --location "$REGION" --schedule "3 * * * *" --uri "$JOB_RUN_URI"
 
 echo "[deploy] done. dbt-run-rl-prod runs hourly at :08 (feature refresh)."
