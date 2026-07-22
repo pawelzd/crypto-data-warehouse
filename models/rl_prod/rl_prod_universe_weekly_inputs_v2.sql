@@ -182,6 +182,14 @@ SELECT
   f.median_dollar_vol_30d,
   f.median_dollar_amihud_30d,
   f.p90_effective_spread_30d_bps,
+  -- Wash-trade / impersonation signal. The OHLCV scam detector (scam_h_wash etc.)
+  -- MISSES thin copycat scams (fake HOOD/Robinhood): they have little price history
+  -- but a 24h volume many multiples of their market cap — a wash-trading signature
+  -- that only shows up in the mcap/volume ratio, which OHLCV patterns can't see.
+  -- Exposed here as evidence for the universe builder to consume. > 3x is the
+  -- validated cutoff (2026-07-22: flags 0 legit members; highest member ratio 1.1).
+  SAFE_DIVIDE(f.median_dollar_vol_30d, f.median_mktcap_30d) AS wash_vol_mktcap_ratio_30d,
+  f.median_dollar_vol_30d > 3 * f.median_mktcap_30d AS is_wash_ratio_suspect,
   s.scam_evidence_json,
   m.token_address IS NOT NULL AS is_manual_scam,
   c.latest_observed_timestamp,

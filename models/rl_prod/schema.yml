@@ -31,6 +31,9 @@ models:
       Threshold-free weekly PIT measurements for the shared v2 state builder.
       Includes observed-hour continuity, trailing liquidity/size statistics,
       and scam evidence whose windows end strictly before each week boundary.
+      Also exposes wash_vol_mktcap_ratio_30d + is_wash_ratio_suspect (>3x): a
+      mcap/volume wash-trade signal that catches thin copycat scams the OHLCV
+      scam detector misses. Evidence only — the frozen v1 universe is unaffected.
 
   - name: rl_prod_universe_membership_pit
     description: >
