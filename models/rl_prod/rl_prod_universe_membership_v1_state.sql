@@ -84,6 +84,25 @@ scam_tokens AS (
   SELECT DISTINCT token_address
   FROM {{ ref('scam_h_union') }}
   WHERE chain = 'sol'
+  UNION DISTINCT
+  -- Wash-traded copycats the OHLCV scam detector (scam_h_union) structurally MISSES:
+  -- thin impersonators (fake HOOD/Robinhood) with little price history but a sustained
+  -- 24h dollar-volume many multiples of market cap — a signature only the mcap/volume
+  -- ratio shows. Computed from the SAME recent `assets` window the membership metrics
+  -- use, so it stays deterministic (PIT-bounded to frozen_through, no CURRENT_TIMESTAMP)
+  -- and consistent with scam_h_union. > 3x is the validated cutoff (2026-07-22: flags 0
+  -- current members; highest member ratio 1.1). scam_tokens only gates NEW weeks, so the
+  -- frozen range is copied from the snapshot untouched.
+  SELECT token_address
+  FROM (
+    SELECT
+      token_address,
+      APPROX_QUANTILES(mktcap, 100)[OFFSET(50)] AS med_mktcap_30d,
+      APPROX_QUANTILES(dollar_vol_24h, 100)[OFFSET(50)] AS med_dollar_vol_30d
+    FROM assets
+    GROUP BY token_address
+  )
+  WHERE med_mktcap_30d > 0 AND med_dollar_vol_30d > 3 * med_mktcap_30d
 ),
 
 new_weeks AS (
