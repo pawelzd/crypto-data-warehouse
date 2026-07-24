@@ -212,8 +212,12 @@ contract AS (
     r.rel_rank_dollar_vol_24h,
     CAST(t.cumret_7d - u.univ_med_logret_168h AS FLOAT64) AS rel_excess_cumret_7d,
     CAST(t.cumret_24h - u.univ_med_logret_24h AS FLOAT64) AS rel_excess_cumret_24h,
-    CAST(t.cumret_7d - b.cumret_7d AS FLOAT64) AS rel_excess_vs_btc_7d,
-    CAST(t.cumret_24h - b.cumret_24h AS FLOAT64) AS rel_excess_vs_btc_24h,
+    -- COALESCE the BTC reference to 0 so a stale/absent btcusdt bar degrades to
+    -- "excess == token's own return" instead of NULL. Paired with the LEFT JOIN
+    -- below: clean100 keeps rel_excess_vs_btc_*, so a NULL here would feed NaN to
+    -- the live model. A BTC outage must never null a feature the policy reads.
+    CAST(t.cumret_7d - COALESCE(b.cumret_7d, 0.0) AS FLOAT64) AS rel_excess_vs_btc_7d,
+    CAST(t.cumret_24h - COALESCE(b.cumret_24h, 0.0) AS FLOAT64) AS rel_excess_vs_btc_24h,
 
     u.univ_n_active,
     u.univ_med_logret_24h,
@@ -264,7 +268,13 @@ contract AS (
   FROM annotated_tokens t
   LEFT JOIN universe_regime u USING (price_timestamp)
   LEFT JOIN relative r USING (token_address, price_timestamp)
-  INNER JOIN btc b USING (price_timestamp)
+  -- LEFT (was INNER): the BTC reference series is a single per-hour row, and an
+  -- INNER JOIN dropped EVERY token bar for any hour BTC was missing — so a stalled
+  -- btcusdt feed froze the whole live serving view (and thus the shadow/decision
+  -- service) even though token OHLCV was fresh. The only BTC-derived columns
+  -- (rel_excess_vs_btc_*, spread_logret_1h) are COALESCEd, so unmatched hours pass
+  -- through cleanly. Mirrors how sol is already joined.
+  LEFT JOIN btc b USING (price_timestamp)
   LEFT JOIN sol s USING (price_timestamp)
   LEFT JOIN membership_weekly mw
     ON mw.week_start = DATE_TRUNC(DATE(t.price_timestamp), WEEK(MONDAY))
