@@ -18,7 +18,8 @@
 -- can't be de-correlated by BigQuery. Validated 2026-08-04: excludes exactly the
 -- 20 off-class members (10 LST + 10 xStock), 0 of the 101 legit tokens.
 -- LST mints below, in order: BNSOL, JitoSOL, JupSOL, PSOL, STKESOL, bSOL, bbSOL,
--- hyloSOL, mSOL, sSOL. (No inline comments inside the {% set %} -- Jinja parses it.)
+-- hyloSOL, mSOL, sSOL. (Keep the list address-only; Jinja parses tag delimiters
+-- even inside SQL comments, so no dbt tag delimiters or per-line comments here.)
 {% set off_class_lst_addresses = [
   'BNso1VUJnh4zcfpZa6986Ea66P6TCp59hvtNJ8b1X85',
   'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
