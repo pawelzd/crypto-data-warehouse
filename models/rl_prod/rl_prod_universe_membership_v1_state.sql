@@ -8,6 +8,30 @@
   cluster_by=['token_address']
 ) }}
 
+-- Off-class assets a crypto-momentum policy has no edge on and should not hold:
+-- liquid-staking-SOL derivatives (below) + tokenized equities (any 'Xs*' mint).
+-- The live shadow (combo-s2) was filling its book with these (~50% of buys / 100%
+-- of the current book) at cumret_7d ~-1% / drawdown_7d ~-5% -- the opposite of the
+-- training profile (+6.8% / -10.6%). Applied as direct predicates at the same
+-- NEW-week gates as scam_tokens (frozen history untouched); NOT via scam_tokens,
+-- because a computed set referencing `assets` inside the correlated NOT EXISTS
+-- can't be de-correlated by BigQuery. Validated 2026-08-04: excludes exactly the
+-- 20 off-class members (10 LST + 10 xStock), 0 of the 101 legit tokens.
+-- LST mints below, in order: BNSOL, JitoSOL, JupSOL, PSOL, STKESOL, bSOL, bbSOL,
+-- hyloSOL, mSOL, sSOL. (No inline comments inside the {% set %} -- Jinja parses it.)
+{% set off_class_lst_addresses = [
+  'BNso1VUJnh4zcfpZa6986Ea66P6TCp59hvtNJ8b1X85',
+  'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
+  'jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v',
+  'pSo1f9nQXWgXibFtKf7NWYxb5enAM4qfP6UJSiXRQfL',
+  'stke7uu3fXHsGqKVVjKnkmj65LRPVrqr4bLG2SJg7rh',
+  'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
+  'Bybit2vBJGhPF52GBdNaQfUJ6ZpThSgHBobjWZpLPb4B',
+  'hy1oXYgrBW6PVcJ4s6s2FKavRdwgWTXdfE69AxT7kPT',
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
+  'sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh'
+] %}
+
 -- Frozen v1 history plus weeks appended under the same v1 rules.
 --
 -- universe_membership_v1_snapshot_20260713 stops at week_start 2026-07-06 and
@@ -103,38 +127,6 @@ scam_tokens AS (
     GROUP BY token_address
   )
   WHERE med_mktcap_30d > 0 AND med_dollar_vol_30d > 3 * med_mktcap_30d
-  UNION DISTINCT
-  -- Off-class assets a crypto-momentum policy has no edge on and should not hold.
-  -- The live shadow (combo-s2) was filling its book with these: ~50% of buys and
-  -- 100% of the current 8-position book were LSTs/xStocks, entered at cumret_7d ~-1%
-  -- / drawdown_7d ~-5% -- the opposite of the training profile (+6.8% / -10.6%
-  -- momentum-on-pullback). They are liquid enough to clear the gates but pegged /
-  -- flat, so there is no idiosyncratic momentum to capture. Validated 2026-08-04:
-  -- flags exactly the 20 off-class members (10 + 10), 0 of the 101 legit tokens.
-  -- Like the wash-copycat screen above, scam_tokens gates NEW weeks only -> the
-  -- frozen training universe is copied from the snapshot untouched.
-  --   * xStocks (tokenized equities): every mint uses the 'Xs' vanity prefix
-  --     (10/10 Xs-prefixed members are genuine xStocks; no false positives).
-  SELECT DISTINCT token_address
-  FROM assets
-  WHERE STARTS_WITH(token_address, 'Xs')
-  UNION DISTINCT
-  --   * LSTs (liquid-staking SOL derivatives): a stable curated set (~10 for months).
-  --     Curated addresses rather than a symbol regex -- there is no symbol column here
-  --     and `%SOL` would risk false-positives on memecoins. Add new LSTs here as they
-  --     qualify (low-burden; the set has been stable).
-  SELECT token_address FROM UNNEST([
-    'BNso1VUJnh4zcfpZa6986Ea66P6TCp59hvtNJ8b1X85',   -- BNSOL
-    'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',  -- JitoSOL
-    'jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v',   -- JupSOL
-    'pSo1f9nQXWgXibFtKf7NWYxb5enAM4qfP6UJSiXRQfL',   -- PSOL
-    'stke7uu3fXHsGqKVVjKnkmj65LRPVrqr4bLG2SJg7rh',   -- STKESOL
-    'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',   -- bSOL
-    'Bybit2vBJGhPF52GBdNaQfUJ6ZpThSgHBobjWZpLPb4B',  -- bbSOL
-    'hy1oXYgrBW6PVcJ4s6s2FKavRdwgWTXdfE69AxT7kPT',   -- hyloSOL
-    'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',   -- mSOL
-    'sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh'    -- sSOL
-  ]) AS token_address
 ),
 
 new_weeks AS (
@@ -169,6 +161,9 @@ weekly_candidate_metrics AS (
     FROM scam_tokens s
     WHERE s.token_address = a.token_address
   )
+  -- Off-class exclusion (new weeks only): tokenized equities + curated LSTs.
+  AND NOT STARTS_WITH(a.token_address, 'Xs')
+  AND a.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
   GROUP BY a.token_address, w.week_start, w.new_week_number
 ),
 
@@ -212,6 +207,9 @@ eligible_tokens AS (
     FROM scam_tokens sc
     WHERE sc.token_address = t.token_address
   )
+  -- Off-class exclusion (new weeks only): tokenized equities + curated LSTs.
+  AND NOT STARTS_WITH(t.token_address, 'Xs')
+  AND t.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
 ),
 
 eligible_token_weeks AS (
