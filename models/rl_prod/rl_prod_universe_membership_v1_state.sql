@@ -17,6 +17,10 @@
 -- because a computed set referencing `assets` inside the correlated NOT EXISTS
 -- can't be de-correlated by BigQuery. Validated 2026-08-04: excludes exactly the
 -- 20 off-class members (10 LST + 10 xStock), 0 of the 101 legit tokens.
+-- 2026-08-11: the curated address list below is a SAFETY NET only; the primary
+-- LST gate is now the property-based `lst_tokens` CTE (price tracks SOL), which
+-- catches new/unlisted LSTs the address list misses (vSOL leaked in and combo-s2
+-- bought it 2026-08-10). xStocks stay pattern-gated (Xs*).
 -- LST mints below, in order: BNSOL, JitoSOL, JupSOL, PSOL, STKESOL, bSOL, bbSOL,
 -- hyloSOL, mSOL, sSOL. (Keep the list address-only; Jinja parses tag delimiters
 -- even inside SQL comments, so no dbt tag delimiters or per-line comments here.)
@@ -96,7 +100,8 @@ assets AS (
     token_address,
     price_timestamp,
     mktcap,
-    dollar_vol_24h
+    dollar_vol_24h,
+    price
   FROM {{ ref('rl_prod_asset_features_history_v') }}
   WHERE token_address != 'btcusdt'
     AND has_168h
@@ -128,6 +133,41 @@ scam_tokens AS (
     GROUP BY token_address
   )
   WHERE med_mktcap_30d > 0 AND med_dollar_vol_30d > 3 * med_mktcap_30d
+),
+
+-- Property-based liquid-staking-SOL (LST) detection. The curated
+-- off_class_lst_addresses list above catches only KNOWN mints, so new LSTs leak
+-- in (vSOL slipped through and combo-s2 bought it 2026-08-10). An LST's USD price
+-- is a near-constant multiple of SOL's (the staking exchange rate, drifting up
+-- slowly), so LN(price / sol_price) has almost zero variance, while any real token
+-- has a large one. Validated 2026-08-11 on 30d of members: the 5 live LSTs
+-- (incl. vSOL) score <=0.0022; the nearest legit token is 0.0308 -- a 14x margin.
+-- Flags exactly the LSTs + wrapped SOL among 101 members, 0 legit false positives.
+-- Same NEW-week gate as scam_tokens; PIT-bounded to the `assets` window; a flat
+-- DISTINCT list (not a correlated subquery), so it de-correlates cleanly.
+lst_tokens AS (
+  SELECT token_address
+  FROM (
+    SELECT
+      a.token_address,
+      COUNT(*) AS n_bars,
+      STDDEV(LN(a.price / s.sol_price)) AS log_ratio_std,
+      AVG(a.price / s.sol_price) AS mean_ratio
+    FROM assets a
+    JOIN (
+      SELECT price_timestamp, price AS sol_price
+      FROM assets
+      WHERE token_address = 'So11111111111111111111111111111111111111112'
+        AND price > 0
+    ) s USING (price_timestamp)
+    WHERE a.price > 0
+    GROUP BY a.token_address
+  )
+  -- Tight SOL-tracking (ratio std < 0.01) AND priced like ~1 SOL (guards against a
+  -- coincidentally-correlated non-LST); >=200 trailing bars for a stable estimate.
+  WHERE n_bars >= 200
+    AND log_ratio_std < 0.01
+    AND mean_ratio BETWEEN 0.5 AND 3.0
 ),
 
 new_weeks AS (
@@ -162,9 +202,14 @@ weekly_candidate_metrics AS (
     FROM scam_tokens s
     WHERE s.token_address = a.token_address
   )
-  -- Off-class exclusion (new weeks only): tokenized equities + curated LSTs.
+  -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern),
+  -- curated LSTs (address list, kept as a safety net), and property-detected
+  -- LSTs (catches new/unlisted ones like vSOL).
   AND NOT STARTS_WITH(a.token_address, 'Xs')
   AND a.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
+  AND NOT EXISTS (
+    SELECT 1 FROM lst_tokens l WHERE l.token_address = a.token_address
+  )
   GROUP BY a.token_address, w.week_start, w.new_week_number
 ),
 
@@ -208,9 +253,13 @@ eligible_tokens AS (
     FROM scam_tokens sc
     WHERE sc.token_address = t.token_address
   )
-  -- Off-class exclusion (new weeks only): tokenized equities + curated LSTs.
+  -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern),
+  -- curated LSTs (address list, safety net), and property-detected LSTs.
   AND NOT STARTS_WITH(t.token_address, 'Xs')
   AND t.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
+  AND NOT EXISTS (
+    SELECT 1 FROM lst_tokens l WHERE l.token_address = t.token_address
+  )
 ),
 
 eligible_token_weeks AS (
