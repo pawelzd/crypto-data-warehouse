@@ -62,6 +62,27 @@
 -- scam-driven exit event.
 {% set frozen_through = '2026-07-06' %}
 
+-- The week the SOL/BTC/ETH-wrapper and pegged-asset detectors take effect.
+-- Weeks BEFORE this keep the membership they were computed with, for two reasons.
+--
+-- Provenance: weeks 2026-07-13..2026-08-10 were already traded against. Silently
+-- rewriting which tokens were members in a week the book has already acted on
+-- makes every past decision irreproducible against its own universe.
+--
+-- Exitability, which is the load-bearing one: `rl_prod_inference_features_v` is
+-- members_only, so a token that is not a member of the CURRENT week disappears
+-- from the live feed. The runner steps only what the feed contains, so a position
+-- held in a vanished token is never stepped, never sold, and strands in the
+-- ledger. The serving view retains a token for 2 weeks after its last member week
+-- so an open position can still be closed -- but that only works if the token was
+-- a member RECENTLY. Applying these detectors retroactively would push the last
+-- member week of all nine back to the frozen boundary, defeating the retention
+-- and stranding the three positions the book holds right now (INF, LBTC, and a
+-- stablecoin -- all three off-class, which is the whole point).
+--
+-- So: excluded from this week forward, still visible long enough to be sold.
+{% set off_class_effective_from = '2026-08-17' %}
+
 WITH RECURSIVE
 frozen AS (
   SELECT
@@ -281,11 +302,17 @@ weekly_candidate_metrics AS (
   -- wrappers of SOL/BTC/ETH, and pegged assets (stablecoins, tokenized gold).
   AND NOT STARTS_WITH(a.token_address, 'Xs')
   AND a.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
-  AND NOT EXISTS (
-    SELECT 1 FROM wrapped_major_tokens w WHERE w.token_address = a.token_address
+  AND (
+    w.week_start < DATE '{{ off_class_effective_from }}'
+    OR NOT EXISTS (
+      SELECT 1 FROM wrapped_major_tokens wm WHERE wm.token_address = a.token_address
+    )
   )
-  AND NOT EXISTS (
-    SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = a.token_address
+  AND (
+    w.week_start < DATE '{{ off_class_effective_from }}'
+    OR NOT EXISTS (
+      SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = a.token_address
+    )
   )
   GROUP BY a.token_address, w.week_start, w.new_week_number
 ),
@@ -330,17 +357,11 @@ eligible_tokens AS (
     FROM scam_tokens sc
     WHERE sc.token_address = t.token_address
   )
-  -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern),
-  -- curated LSTs (address list, safety net), property-detected wrappers of
-  -- SOL/BTC/ETH, and pegged assets (stablecoins, tokenized gold).
+  -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern) and
+  -- curated LSTs (address list, safety net). The property-based wrapper/pegged
+  -- detectors are applied in `eligible_token_weeks`, where a week is in scope.
   AND NOT STARTS_WITH(t.token_address, 'Xs')
   AND t.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
-  AND NOT EXISTS (
-    SELECT 1 FROM wrapped_major_tokens w WHERE w.token_address = t.token_address
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = t.token_address
-  )
 ),
 
 eligible_token_weeks AS (
@@ -352,6 +373,22 @@ eligible_token_weeks AS (
   FROM eligible_tokens e
   CROSS JOIN new_weeks w
   WHERE w.week_start >= e.first_observed_date
+    -- Wrapper/pegged exclusion applies from off_class_effective_from onward. It
+    -- belongs here, not in `eligible_tokens`: that CTE is a per-TOKEN list with no
+    -- week in scope, so a week-dependent predicate cannot be expressed there.
+    AND (
+      w.week_start < DATE '{{ off_class_effective_from }}'
+      OR (
+        NOT EXISTS (
+          SELECT 1 FROM wrapped_major_tokens wm
+          WHERE wm.token_address = e.token_address
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM pegged_tokens pg
+          WHERE pg.token_address = e.token_address
+        )
+      )
+    )
 ),
 
 weekly_inputs AS (

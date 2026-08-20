@@ -1,10 +1,33 @@
-{% macro rl_prod_inference_features_sql(asset_features_model, output_hours=none, min_mktcap=0, members_only=false, minimum_member_coverage=0.90, include_edge=false) %}
+{% macro rl_prod_inference_features_sql(asset_features_model, output_hours=none, min_mktcap=0, members_only=false, minimum_member_coverage=0.90, include_edge=false, retain_recent_member_weeks=0) %}
 {# include_edge=true keeps the freshest bar (next_price / next_next_open still
    NULL) so the LIVE decision service can decide on the latest closed bar rather
    than waiting ~2h for the t+1 return-mark to settle. The execution price
    (next_open = the bar's own price) IS present at the edge; only the return-mark
    is missing, which the live runner fills with the live price. Training/parity
-   views keep include_edge=false so their contract is unchanged. #}
+   views keep include_edge=false so their contract is unchanged.
+
+   retain_recent_member_weeks > 0 also emits a token that LEFT the universe within
+   that many weeks. Under members_only=true a token vanishes from the feed the
+   moment it stops being a member -- including one the live book is still HOLDING.
+   The runner steps only tokens present in the feed, so that position is never
+   stepped, the model never emits its sell, orphan reconciliation finds no proposal
+   to act on, and it is stranded in the ledger indefinitely. Membership advances
+   every Monday, so this is reachable in normal operation by any held token, not
+   just by an off-class exclusion.
+
+   The decision layer is already correct: sim/paper_trade.py gates BUY on
+   in_universe_pit per bar and deliberately allows an open position to be managed
+   or closed on a non-member bar ("Non-member bars never open a position; an
+   already-open position may be managed/closed freely"). Only the feed was too
+   narrow for that to be reachable. Emitting these rows therefore cannot leak an
+   entry -- the per-bar gate still refuses one -- and cannot move any member's
+   features, because the univ_* cross-sectional aggregates are computed from
+   `active_tokens` (members only) no matter what is emitted.
+
+   Implemented as a correlated EXISTS on the final filter rather than a flag
+   column: `contract` has an explicit column list, so a flag would have to be
+   threaded through every CTE between here and there. Defaults to 0, so
+   history/training/parity views compile byte-identical. #}
 
 WITH assets AS (
   SELECT * FROM {{ ref(asset_features_model) }}
@@ -281,11 +304,29 @@ contract AS (
 )
 
 SELECT * EXCEPT(expected_member_count)
-FROM contract
+FROM contract{% if members_only and retain_recent_member_weeks > 0 %} c{% endif %}
 {% if include_edge %}WHERE TRUE{% else %}WHERE next_next_open IS NOT NULL{% endif %}
 {% if members_only %}
+{%- if retain_recent_member_weeks > 0 %}
+  AND (
+    c.in_universe_pit
+    -- ... or a member within the last {{ retain_recent_member_weeks }} weeks, so a
+    -- position held in a token that just left the universe can still be exited.
+    OR EXISTS (
+      SELECT 1
+      FROM membership m2
+      WHERE m2.token_address = c.token_address
+        AND m2.in_universe_pit
+        AND m2.week_start >= DATE_SUB(
+              DATE_TRUNC(DATE(c.price_timestamp), WEEK(MONDAY)),
+              INTERVAL {{ retain_recent_member_weeks }} WEEK)
+    )
+  )
+  AND c.univ_n_active >= c.expected_member_count * {{ minimum_member_coverage }}
+{%- else %}
   AND in_universe_pit
   AND univ_n_active >= expected_member_count * {{ minimum_member_coverage }}
+{%- endif %}
 {% endif %}
 {% if output_hours is not none %}
   AND price_timestamp >= TIMESTAMP_SUB(
