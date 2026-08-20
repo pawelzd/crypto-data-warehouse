@@ -18,9 +18,11 @@
 -- can't be de-correlated by BigQuery. Validated 2026-08-04: excludes exactly the
 -- 20 off-class members (10 LST + 10 xStock), 0 of the 101 legit tokens.
 -- 2026-08-11: the curated address list below is a SAFETY NET only; the primary
--- LST gate is now the property-based `lst_tokens` CTE (price tracks SOL), which
--- catches new/unlisted LSTs the address list misses (vSOL leaked in and combo-s2
--- bought it 2026-08-10). xStocks stay pattern-gated (Xs*).
+-- LST gate is now the property-based `wrapped_major_tokens` CTE, which catches
+-- new/unlisted wrappers the address list misses (vSOL leaked in and combo-s2
+-- bought it 2026-08-10). 2026-08-21: that CTE was SOL-only, so wrapped BTC/ETH
+-- sailed through -- it now tests SOL, BTC and ETH, and `pegged_tokens` covers
+-- stablecoins and tokenized commodities. xStocks stay pattern-gated (Xs*).
 -- LST mints below, in order: BNSOL, JitoSOL, JupSOL, PSOL, STKESOL, bSOL, bbSOL,
 -- hyloSOL, mSOL, sSOL. (Keep the list address-only; Jinja parses tag delimiters
 -- even inside SQL comments, so no dbt tag delimiters or per-line comments here.)
@@ -135,39 +137,111 @@ scam_tokens AS (
   WHERE med_mktcap_30d > 0 AND med_dollar_vol_30d > 3 * med_mktcap_30d
 ),
 
--- Property-based liquid-staking-SOL (LST) detection. The curated
--- off_class_lst_addresses list above catches only KNOWN mints, so new LSTs leak
--- in (vSOL slipped through and combo-s2 bought it 2026-08-10). An LST's USD price
--- is a near-constant multiple of SOL's (the staking exchange rate, drifting up
--- slowly), so LN(price / sol_price) has almost zero variance, while any real token
--- has a large one. Validated 2026-08-11 on 30d of members: the 5 live LSTs
--- (incl. vSOL) score <=0.0022; the nearest legit token is 0.0308 -- a 14x margin.
--- Flags exactly the LSTs + wrapped SOL among 101 members, 0 legit false positives.
--- Same NEW-week gate as scam_tokens; PIT-bounded to the `assets` window; a flat
--- DISTINCT list (not a correlated subquery), so it de-correlates cleanly.
-lst_tokens AS (
-  SELECT token_address
+-- Property-based detection of assets a crypto-momentum policy has no edge on.
+-- Two independent mechanisms; a token is off-class if EITHER fires.
+--
+-- (1) wrapped_major_tokens -- price is a near-constant multiple of a major.
+-- A wrapper's USD price is its underlying times a slowly-drifting factor (a
+-- staking exchange rate, or 1.0 for a custodial wrapper), so LN(price / ref) has
+-- almost no variance while a real token has a lot. Originally SOL-only, which
+-- caught the LSTs and wSOL but NOT the four wrapped-BTC members (cbBTC, WBTC,
+-- zBTC, LBTC) or WETH -- those track BTC and ETH, not SOL, so the SOL ratio test
+-- sees ordinary variance and waves them through. LBTC was bought by the live
+-- book on 2026-08-20. Now evaluated against three references.
+--   Validated 2026-08-21 over this model's own `assets` window (from
+--   frozen_through - 30d), flagging exactly 9 of the 99 members of week
+--   2026-08-17, 0 legit false positives:
+--     BTC  WBTC 0.00096 / cbBTC 0.00105 / LBTC 0.00574 / zBTC 0.00648 (all ~1.00x)
+--     ETH  WETH 0.0 (self-reference, mean 1.00)
+--     SOL  wSOL 0.0, INF 0.00488 (1.43x)
+--   The nearest unflagged token inside the mean-ratio band is >2x the widest
+--   flagged std. Tokens outside the band are not close on ratio_std either.
+--
+-- The BTC reference is `btcusdt`, which `assets` deliberately excludes, so it is
+-- read from the source view under the SAME PIT bound -- no CURRENT_TIMESTAMP, so
+-- the model stays deterministic. SOL and ETH are referenced by mint from `assets`
+-- itself. A reference is matched by its own test (ratio std 0, mean 1.0), which
+-- is how wSOL and WETH exclude themselves -- deliberate, and the reason no
+-- separate address entry is needed for either.
+--
+-- NOTE this cannot reach a FRACTIONAL wrapper (e.g. a satoshi-denominated token
+-- at ~1e-8 BTC): the mean-ratio band [0.5, 3.0] excludes it by construction. The
+-- band is the guard against a coincidentally-correlated real token, so widening
+-- it to catch fractional wrappers would trade a real false-positive risk for a
+-- case that has never been a member. Curated addresses remain the safety net.
+wrapped_major_tokens AS (
+  SELECT DISTINCT token_address
   FROM (
     SELECT
       a.token_address,
       COUNT(*) AS n_bars,
-      STDDEV(LN(a.price / s.sol_price)) AS log_ratio_std,
-      AVG(a.price / s.sol_price) AS mean_ratio
+      STDDEV(LN(a.price / r.ref_price)) AS log_ratio_std,
+      AVG(a.price / r.ref_price) AS mean_ratio
     FROM assets a
     JOIN (
-      SELECT price_timestamp, price AS sol_price
+      SELECT 'SOL' AS ref_key, price_timestamp, price AS ref_price
       FROM assets
       WHERE token_address = 'So11111111111111111111111111111111111111112'
         AND price > 0
-    ) s USING (price_timestamp)
+      UNION ALL
+      SELECT 'ETH' AS ref_key, price_timestamp, price AS ref_price
+      FROM assets
+      WHERE token_address = '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'
+        AND price > 0
+      UNION ALL
+      SELECT 'BTC' AS ref_key, price_timestamp, price AS ref_price
+      FROM {{ ref('rl_prod_asset_features_history_v') }}
+      WHERE token_address = 'btcusdt'
+        AND price > 0
+        AND price_timestamp >= TIMESTAMP_SUB(
+          TIMESTAMP(DATE '{{ frozen_through }}'), INTERVAL 30 DAY
+        )
+    ) r USING (price_timestamp)
     WHERE a.price > 0
-    GROUP BY a.token_address
+    -- Per (token, reference). Grouping by token alone would pool all three
+    -- references into one stddev and measure nothing.
+    GROUP BY a.token_address, r.ref_key
   )
-  -- Tight SOL-tracking (ratio std < 0.01) AND priced like ~1 SOL (guards against a
-  -- coincidentally-correlated non-LST); >=200 trailing bars for a stable estimate.
   WHERE n_bars >= 200
     AND log_ratio_std < 0.01
     AND mean_ratio BETWEEN 0.5 AND 3.0
+),
+
+-- (2) pegged_tokens -- realised volatility far below any real token.
+-- The ratio test above cannot see a stablecoin or a tokenized commodity: they
+-- track something with no crypto beta, so no crypto reference fits them. They
+-- are instead obvious on absolute hourly volatility. Among week 2026-08-17's
+-- members the ordered distribution over this window is
+--     0.0065%  (a $1.00 stablecoin -- which the live book was HOLDING)
+--     0.0219%  (tokenized gold, ~$4,110)
+--     0.2081%  <- first real token
+-- a ~10x gap, so 0.10% sits mid-gap: 4.6x above the widest peg and 2x below the
+-- nearest real token. Measured over the SAME window as everything else, which
+-- matters -- on a trailing 30d window the 0.2081% token reads 0.06% (it simply
+-- had a quiet month) and a threshold tuned there would wrongly exclude it.
+-- Dead/frozen-price tokens also score ~0 here but are already non-members under
+-- the volume and mktcap rules, so this predicate does not widen their exclusion.
+pegged_tokens AS (
+  SELECT token_address
+  FROM (
+    SELECT
+      token_address,
+      COUNT(*) AS n_bars,
+      STDDEV(log_return) * 100 AS hourly_vol_pct
+    FROM (
+      -- LAG is analytic, so it must resolve in its own level before STDDEV
+      -- aggregates over it.
+      SELECT
+        token_address,
+        SAFE.LN(price / LAG(price) OVER (
+          PARTITION BY token_address ORDER BY price_timestamp)) AS log_return
+      FROM assets
+      WHERE price > 0
+    )
+    GROUP BY token_address
+  )
+  WHERE n_bars >= 200
+    AND hourly_vol_pct < 0.10
 ),
 
 new_weeks AS (
@@ -203,12 +277,15 @@ weekly_candidate_metrics AS (
     WHERE s.token_address = a.token_address
   )
   -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern),
-  -- curated LSTs (address list, kept as a safety net), and property-detected
-  -- LSTs (catches new/unlisted ones like vSOL).
+  -- curated LSTs (address list, kept as a safety net), property-detected
+  -- wrappers of SOL/BTC/ETH, and pegged assets (stablecoins, tokenized gold).
   AND NOT STARTS_WITH(a.token_address, 'Xs')
   AND a.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
   AND NOT EXISTS (
-    SELECT 1 FROM lst_tokens l WHERE l.token_address = a.token_address
+    SELECT 1 FROM wrapped_major_tokens w WHERE w.token_address = a.token_address
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = a.token_address
   )
   GROUP BY a.token_address, w.week_start, w.new_week_number
 ),
@@ -254,11 +331,15 @@ eligible_tokens AS (
     WHERE sc.token_address = t.token_address
   )
   -- Off-class exclusion (new weeks only): tokenized equities (Xs* pattern),
-  -- curated LSTs (address list, safety net), and property-detected LSTs.
+  -- curated LSTs (address list, safety net), property-detected wrappers of
+  -- SOL/BTC/ETH, and pegged assets (stablecoins, tokenized gold).
   AND NOT STARTS_WITH(t.token_address, 'Xs')
   AND t.token_address NOT IN UNNEST({{ off_class_lst_addresses | tojson }})
   AND NOT EXISTS (
-    SELECT 1 FROM lst_tokens l WHERE l.token_address = t.token_address
+    SELECT 1 FROM wrapped_major_tokens w WHERE w.token_address = t.token_address
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = t.token_address
   )
 ),
 
