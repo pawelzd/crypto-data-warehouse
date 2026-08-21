@@ -236,10 +236,34 @@ wrapped_major_tokens AS (
 --     0.0065%  (a $1.00 stablecoin -- which the live book was HOLDING)
 --     0.0219%  (tokenized gold, ~$4,110)
 --     0.2081%  <- first real token
--- a ~10x gap, so 0.10% sits mid-gap: 4.6x above the widest peg and 2x below the
--- nearest real token. Measured over the SAME window as everything else, which
--- matters -- on a trailing 30d window the 0.2081% token reads 0.06% (it simply
--- had a quiet month) and a threshold tuned there would wrongly exclude it.
+-- a ~10x gap, so 0.10% sits mid-gap. Measured over the SAME window as everything
+-- else, which matters -- on a trailing 30d window the 0.2081% token reads 0.06%
+-- (it simply had a quiet month) and a threshold tuned there would wrongly exclude
+-- it.
+--
+-- RE-VALIDATED 2026-08-21 after the weekly wide backfill landed, which grew the
+-- candidate pool from ~250 to ~1,170 tokens and therefore changed this CTE's
+-- INPUT. The threshold survives, but the margin is narrower than the figures
+-- above -- those were measured on the starved pool and must not be quoted as
+-- current. On the full pool: highest flagged 0.0729% (a USD1 stablecoin), lowest
+-- unflagged 0.1496% (a real $750 asset trading $2.7M/day). That is ~2x on each
+-- side of 0.10%, not 10x. Nothing sits near the boundary, so the threshold holds
+-- -- but it is now a 2x margin and should be re-checked if the pool widens again.
+--
+-- The wider pool also made this predicate MORE correct, not less. Of 206 tokens
+-- flagged, 21 are entry-grade (>=$50k median volume AND >=$20M median mktcap) and
+-- every one is genuinely off-class: USDC and USDT themselves, eight more ~$1.00
+-- stablecoins, six YIELD-BEARING stables drifting slowly at 1.03-1.17, tokenized
+-- gold, and the stablecoin the live book was holding. No momentum token appears
+-- in that set. The remaining ~185 are dead tokens with 99%+ zero returns.
+--
+-- WHY A LIQUIDITY GATE MUST ACCOMPANY THIS: Birdeye records an untraded hour as a
+-- zero-volume bar with the price CARRIED FORWARD, so an illiquid token
+-- accumulates zero returns and its realised volatility is deflated toward this
+-- threshold for reasons that have nothing to do with being pegged. Measured
+-- 2026-08-21: members average 4.6% zero-volume bars, non-members 44.7%. This
+-- predicate is safe only because it sits alongside the volume, mktcap and amihud
+-- gates that keep the dead tail out on independent grounds.
 -- Dead/frozen-price tokens also score ~0 here but are already non-members under
 -- the volume and mktcap rules, so this predicate does not widen their exclusion.
 pegged_tokens AS (
