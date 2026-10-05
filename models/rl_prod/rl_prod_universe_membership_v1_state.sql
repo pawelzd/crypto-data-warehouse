@@ -83,6 +83,30 @@
 -- So: excluded from this week forward, still visible long enough to be sold.
 {% set off_class_effective_from = '2026-08-17' %}
 
+-- Wash-traded / fake-market-cap tokens (2026-10-05). The OHLCV scam detectors
+-- (scam_h_union) and the volume/mcap copycat screen in scam_tokens both miss a
+-- token whose fake volume is STEADY and small next to a fake market cap; the
+-- Amihud liquidity gate even rewards it, since wash volume barely moves price.
+-- The live F-003 book bought one (MUSK, 2026-10-04). Identified from Birdeye's
+-- market snapshot by activity per participant: fewer than 100 wallets behind at
+-- least 250k USD of 24h volume, OR fewer than 2000 holders behind at least 50M
+-- USD of market cap; applied to non-off-class members, it flags exactly these four
+-- and no legitimate member (validated 2026-10-05 against all 76 current members):
+-- MUSK TheMuskToken (33 wallets, 10k trades/24h, 743 holders, 316M mcap),
+-- WYT WowMyToken (1737 holders, 85-272M mcap), CTM c8ntinuum (26-109 wallets,
+-- ~1800 holders, 66-71M mcap), RIV RIV Coin (52-77 wallets, wallet leg only).
+-- A curated address list, like off_class_lst_addresses, because the snapshot has
+-- no timestamps and would make rebuilds non-deterministic. FORWARD-ONLY from
+-- wash_effective_from: weeks already traded against keep their membership, and
+-- the serving view's 2-week retention keeps a held token sellable after it exits.
+{% set wash_traded_addresses = [
+  'D4BPL1zvhhJbxUdgi2qVUtjx4jeQWyUr2PAUjKc9rN5x',
+  '7pKXpFsnZS5BB4Eydk3uZ84FeKDSvkv1z4Hv5ayQ28RV',
+  'C8fU5GdfAt5mnw2RK7HE6XJGFNxHpaskZMkXxdm88888',
+  '2bpT3ksMdwdZ6DuHyq3FDUr7HDwvZ5DRZoT1fUPALJaH'
+] %}
+{% set wash_effective_from = '2026-10-12' %}
+
 WITH RECURSIVE
 frozen AS (
   SELECT
@@ -338,6 +362,10 @@ weekly_candidate_metrics AS (
       SELECT 1 FROM pegged_tokens pg WHERE pg.token_address = a.token_address
     )
   )
+  AND (
+    w.week_start < DATE '{{ wash_effective_from }}'
+    OR a.token_address NOT IN UNNEST({{ wash_traded_addresses | tojson }})
+  )
   GROUP BY a.token_address, w.week_start, w.new_week_number
 ),
 
@@ -412,6 +440,11 @@ eligible_token_weeks AS (
           WHERE pg.token_address = e.token_address
         )
       )
+    )
+    -- Wash-traded exclusion, forward-only from wash_effective_from (see top).
+    AND (
+      w.week_start < DATE '{{ wash_effective_from }}'
+      OR e.token_address NOT IN UNNEST({{ wash_traded_addresses | tojson }})
     )
 ),
 

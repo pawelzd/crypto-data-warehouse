@@ -24,7 +24,7 @@ RUNTIME_SA="${RUNTIME_SA:-rl-prod@${PROJECT}.iam.gserviceaccount.com}"
 # The rl_prod serving-view selectors and the membership test selectors.
 SELECT_MEMBERSHIP_ADVANCE="rl_prod_universe_membership_v1_state"
 SELECT_REFRESH="rl_prod_universe_membership_pit rl_prod_asset_features_v rl_prod_inference_features_v"
-SELECT_TESTS="rl_prod_membership_no_lookahead rl_prod_membership_hysteresis rl_prod_membership_incumbents_first rl_prod_membership_turnover rl_prod_membership_count_band rl_prod_no_scam_tokens rl_prod_universe_internal_consistency rl_prod_universe_discovery_pool"
+SELECT_TESTS="rl_prod_no_wash_traded_members rl_prod_wash_candidates rl_prod_membership_no_lookahead rl_prod_membership_hysteresis rl_prod_membership_incumbents_first rl_prod_membership_turnover rl_prod_membership_count_band rl_prod_no_scam_tokens rl_prod_universe_internal_consistency rl_prod_universe_discovery_pool"
 
 echo "[deploy] building dbt image -> $IMAGE (Cloud Build — no local Docker)"
 gcloud builds submit --project "$PROJECT" --config cloudbuild.yaml \
